@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.TitleBar"
+             x:DataType="vm:ShellVm"
+             Height="38">
+    <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
+            Background="{Binding Tokens.Bg}">
+        <Grid ColumnDefinitions="80,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto"
+              VerticalAlignment="Center">
+            <!-- Brand mark -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="16" Height="16" CornerRadius="{Binding Tokens.RadSmCorner}"
+                        Background="{Binding Tokens.Text}">
+                    <TextBlock Text="C" Foreground="{Binding Tokens.Bg}" FontSize="9"
+                               FontWeight="ExtraBold" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="Conclave" Margin="7,0,0,0" FontSize="12.5" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.Text}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Grid.Column="2" Text="›" Margin="8,0" Foreground="{Binding Tokens.TextMute}"
+                       VerticalAlignment="Center" />
+            <TextBlock Grid.Column="3" Text="{Binding ActiveProjectName}" FontSize="12.5"
+                       Foreground="{Binding Tokens.TextDim}" VerticalAlignment="Center" />
+
+            <TextBlock Grid.Column="4" Text="›" Margin="8,0" Foreground="{Binding Tokens.TextMute}"
+                       VerticalAlignment="Center" IsVisible="{Binding HasActiveSession}" />
+            <TextBlock Grid.Column="5" Text="{Binding ActiveSession.Title, FallbackValue=''}"
+                       FontSize="12.5" FontWeight="Medium" Foreground="{Binding Tokens.Text}"
+                       VerticalAlignment="Center" MaxWidth="420" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding HasActiveSession}" />
+
+            <!-- ⌘K pill -->
+            <Border Grid.Column="7" Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
+                    BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                    VerticalAlignment="Center" Margin="0,0,8,0">
+                <TextBlock Text="⌘K" FontSize="11.5" FontWeight="Medium"
+                           Foreground="{Binding Tokens.TextDim}"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+            </Border>
+
+            <!-- New session (primary) -->
+            <Border Grid.Column="8" Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
+                    Background="{Binding Tokens.Text}" VerticalAlignment="Center" Margin="0,0,10,0"
+                    PointerPressed="OnNewSession" Cursor="Hand">
+                <TextBlock Text="New session" FontSize="11.5" FontWeight="Medium"
+                           Foreground="{Binding Tokens.Bg}" />
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

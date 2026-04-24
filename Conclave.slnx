@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Conclave.App/Conclave.App.csproj" />
+  </Folder>
+</Solution>

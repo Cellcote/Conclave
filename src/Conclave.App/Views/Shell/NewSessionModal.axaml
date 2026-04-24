@@ -1,0 +1,220 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.NewSessionModal"
+             x:DataType="vm:ShellVm">
+    <Panel IsVisible="{Binding IsNewSessionOpen}" IsHitTestVisible="{Binding IsNewSessionOpen}"
+           KeyDown="OnModalKeyDown"
+           Focusable="True">
+        <!-- Backdrop -->
+        <Border Background="#A6000000" PointerPressed="OnBackdropPressed" />
+
+        <!-- Modal card -->
+        <Border Width="540" MaxHeight="560"
+                VerticalAlignment="Center" HorizontalAlignment="Center"
+                Background="{Binding Tokens.Bg}"
+                BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadLgCorner}"
+                Padding="24"
+                DataContext="{Binding NewSession}"
+                x:DataType="vm:NewSessionVm">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="60" OffsetY="20" Opacity="0.5" Color="Black" />
+            </Border.Effect>
+
+            <StackPanel Spacing="16">
+                <TextBlock Text="New session" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.Text}" />
+
+                <!-- Project -->
+                <StackPanel>
+                    <TextBlock Text="PROJECT" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5"
+                               Margin="0,0,0,6" />
+                    <ComboBox ItemsSource="{Binding Projects}"
+                              SelectedItem="{Binding Project, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ProjectVm">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding Name}" FontSize="13"
+                                               Foreground="{Binding Tokens.Text}" />
+                                    <TextBlock Text="{Binding Path}" FontSize="11.5"
+                                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                               Foreground="{Binding Tokens.TextDim}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Content="+ Add project…" Click="OnAddProject"
+                            Margin="0,6,0,0" HorizontalAlignment="Left"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="{Binding Tokens.TextDim}" FontSize="11.5"
+                            Padding="0" />
+                </StackPanel>
+
+                <!-- Branch -->
+                <StackPanel>
+                    <TextBlock Text="BRANCH" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5"
+                               Margin="0,0,0,6" />
+                    <TextBox Text="{Binding Branch, Mode=TwoWay}"
+                             PlaceholderText="feat/awesome-thing"
+                             FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                             FontSize="12.5" />
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                        <TextBlock Text="Branch from" FontSize="11" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Center" />
+                        <Border Padding="6,3" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                CornerRadius="{Binding Tokens.RadXsCorner}"
+                                Background="{Binding Tokens.Panel}">
+                            <TextBlock Text="{Binding BaseBranch}" FontSize="11"
+                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                       Foreground="{Binding Tokens.Text}" />
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Worktree readout -->
+                <StackPanel>
+                    <TextBlock Text="WORKTREE" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5"
+                               Margin="0,0,0,6" />
+                    <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                            CornerRadius="{Binding Tokens.RadSmCorner}"
+                            Background="{Binding Tokens.Panel}" Padding="10,7">
+                        <TextBlock Text="{Binding WorktreePath}" FontSize="11.5"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   Foreground="{Binding Tokens.TextDim}" />
+                    </Border>
+                </StackPanel>
+
+                <!-- Model -->
+                <StackPanel>
+                    <TextBlock Text="MODEL" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5"
+                               Margin="0,0,0,6" />
+                    <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                            CornerRadius="{Binding Tokens.RadMdCorner}" Padding="2"
+                            Background="{Binding Tokens.Panel}" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    PointerPressed="OnPickHaiku" IsVisible="{Binding IsHaiku}">
+                                <TextBlock Text="Haiku 4.5" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.Text}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    BorderThickness="1" BorderBrush="Transparent"
+                                    PointerPressed="OnPickHaiku" IsVisible="{Binding !IsHaiku}">
+                                <TextBlock Text="Haiku 4.5" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    PointerPressed="OnPickSonnet" IsVisible="{Binding IsSonnet}">
+                                <TextBlock Text="Sonnet 4.5" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.Text}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    BorderThickness="1" BorderBrush="Transparent"
+                                    PointerPressed="OnPickSonnet" IsVisible="{Binding !IsSonnet}">
+                                <TextBlock Text="Sonnet 4.5" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    PointerPressed="OnPickOpus" IsVisible="{Binding IsOpus}">
+                                <TextBlock Text="Opus 4" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.Text}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    BorderThickness="1" BorderBrush="Transparent"
+                                    PointerPressed="OnPickOpus" IsVisible="{Binding !IsOpus}">
+                                <TextBlock Text="Opus 4" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Permission mode -->
+                <StackPanel>
+                    <TextBlock Text="PERMISSIONS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5"
+                               Margin="0,0,0,6" />
+                    <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                            CornerRadius="{Binding Tokens.RadMdCorner}" Padding="2"
+                            Background="{Binding Tokens.Panel}" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    PointerPressed="OnPickPermDefault" IsVisible="{Binding IsPermDefault}">
+                                <TextBlock Text="Prompt" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.Text}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    BorderThickness="1" BorderBrush="Transparent"
+                                    PointerPressed="OnPickPermDefault" IsVisible="{Binding !IsPermDefault}">
+                                <TextBlock Text="Prompt" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    PointerPressed="OnPickPermAcceptEdits" IsVisible="{Binding IsPermAcceptEdits}">
+                                <TextBlock Text="Auto-accept edits" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.Text}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    BorderThickness="1" BorderBrush="Transparent"
+                                    PointerPressed="OnPickPermAcceptEdits" IsVisible="{Binding !IsPermAcceptEdits}">
+                                <TextBlock Text="Auto-accept edits" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    PointerPressed="OnPickPermBypass" IsVisible="{Binding IsPermBypass}">
+                                <TextBlock Text="Full access" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.Text}" />
+                            </Border>
+                            <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    BorderThickness="1" BorderBrush="Transparent"
+                                    PointerPressed="OnPickPermBypass" IsVisible="{Binding !IsPermBypass}">
+                                <TextBlock Text="Full access" FontSize="12" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Error banner -->
+                <Border IsVisible="{Binding HasError}"
+                        BorderBrush="{Binding Tokens.Err}" BorderThickness="1"
+                        CornerRadius="{Binding Tokens.RadSmCorner}"
+                        Padding="10,8">
+                    <TextBlock Text="{Binding ErrorMessage}" FontSize="12"
+                               TextWrapping="Wrap"
+                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                               Foreground="{Binding Tokens.Err}" />
+                </Border>
+
+                <!-- Footer -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,8,0,0">
+                    <TextBlock Text="⌘⏎ create" FontSize="11"
+                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                               Foreground="{Binding Tokens.TextMute}" VerticalAlignment="Center" />
+                    <Button Grid.Column="2" Content="Cancel" Click="OnCancel"
+                            Background="Transparent" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                            CornerRadius="{Binding Tokens.RadSmCorner}" Padding="12,5"
+                            Foreground="{Binding Tokens.Text}" FontSize="12" FontWeight="Medium"
+                            Margin="0,0,8,0" />
+                    <Button Grid.Column="3" Content="Create session" Click="OnCreate"
+                            Background="{Binding Tokens.Text}" BorderThickness="0"
+                            CornerRadius="{Binding Tokens.RadSmCorner}" Padding="12,5"
+                            Foreground="{Binding Tokens.Bg}" FontSize="12" FontWeight="SemiBold"
+                            IsEnabled="{Binding CanCreate}" />
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Panel>
+</UserControl>

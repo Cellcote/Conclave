@@ -1,0 +1,174 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.Sidebar"
+             x:DataType="vm:ShellVm">
+    <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*">
+        <!-- Search pill -->
+        <Border Grid.Row="0" Margin="10,8,10,10"
+                BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadMdCorner}" Padding="10,6">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Text="⌕" Foreground="{Binding Tokens.TextMute}" FontSize="12.5"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="Search"
+                           Foreground="{Binding Tokens.TextMute}" FontSize="12.5"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="⌘P" Foreground="{Binding Tokens.TextMute}"
+                           FontSize="10.5" VerticalAlignment="Center"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Padding="8,0" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <!-- Filters -->
+                <ItemsControl ItemsSource="{Binding Filters}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FilterVm">
+                            <Border Padding="10,6" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Background="{Binding BackgroundBrush}"
+                                    PointerPressed="OnFilterPressed">
+                                <Grid ColumnDefinitions="14,*,Auto">
+                                    <Panel Grid.Column="0" Width="8" Height="8"
+                                           VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <Border IsVisible="{Binding HasDot}" Width="6" Height="6"
+                                                CornerRadius="3" Background="{Binding DotColor}" />
+                                        <TextBlock IsVisible="{Binding !HasDot}" Text="◱" FontSize="10"
+                                                   Foreground="{Binding Tokens.TextDim}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Panel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Label}"
+                                               Margin="9,0,0,0"
+                                               Foreground="{Binding TextBrush}"
+                                               FontWeight="{Binding FontWeight}"
+                                               FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Count}"
+                                               Foreground="{Binding Tokens.TextMute}" FontSize="11"
+                                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Height="14" />
+
+                <!-- Projects with nested sessions -->
+                <ItemsControl ItemsSource="{Binding Projects}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProjectVm">
+                            <StackPanel Margin="0,6,0,0" IsVisible="{Binding IsVisibleInTree}">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,6">
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Rename" Click="OnRenameProjectMenu" />
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                    <TextBlock Text="▾" FontSize="9"
+                                               Foreground="{Binding Tokens.TextDim}"
+                                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{Binding Tokens.Text}" VerticalAlignment="Center"
+                                               IsVisible="{Binding !IsEditing}"
+                                               DoubleTapped="OnProjectNameDoubleTapped" />
+                                    <TextBox Grid.Column="1" Text="{Binding EditingName, Mode=TwoWay}"
+                                             FontSize="12" FontWeight="SemiBold"
+                                             IsVisible="{Binding IsEditing}"
+                                             AttachedToVisualTree="OnEditAttached"
+                                             KeyDown="OnProjectRenameKeyDown"
+                                             LostFocus="OnProjectRenameLostFocus" />
+                                    <TextBlock Grid.Column="2" Text="{Binding SessionCount}"
+                                               FontSize="10.5" Foreground="{Binding Tokens.TextMute}"
+                                               VerticalAlignment="Center"
+                                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Sessions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SessionVm">
+                                            <Border Margin="0,1" Padding="10,7,10,7"
+                                                    CornerRadius="{Binding Tokens.RadSmCorner}"
+                                                    Background="{Binding BackgroundBrush}"
+                                                    IsVisible="{Binding IsVisibleInTree}"
+                                                    PointerPressed="OnSessionPressed">
+                                                <Border.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="Rename" Click="OnRenameMenu" />
+                                                        <MenuItem Header="Delete" Click="OnDeleteMenu" />
+                                                    </ContextMenu>
+                                                </Border.ContextMenu>
+                                                <Grid ColumnDefinitions="22,*,Auto">
+                                                    <Border Grid.Column="0" Width="6" Height="6"
+                                                            CornerRadius="3"
+                                                            Background="{Binding StatusColor}"
+                                                            VerticalAlignment="Top" Margin="0,5,0,0"
+                                                            HorizontalAlignment="Center" />
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   FontSize="12.5"
+                                                                   Foreground="{Binding TitleBrush}"
+                                                                   FontWeight="{Binding TitleFontWeight}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   IsVisible="{Binding !IsEditing}"
+                                                                   DoubleTapped="OnSessionTitleDoubleTapped" />
+                                                        <TextBox Text="{Binding EditingName, Mode=TwoWay}"
+                                                                 FontSize="12.5"
+                                                                 IsVisible="{Binding IsEditing}"
+                                                                 AttachedToVisualTree="OnEditAttached"
+                                                                 KeyDown="OnRenameKeyDown"
+                                                                 LostFocus="OnRenameLostFocus" />
+                                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                            <TextBlock Text="{Binding Branch}" FontSize="10.5"
+                                                                       Foreground="{Binding Tokens.TextMute}"
+                                                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <StackPanel Orientation="Horizontal" IsVisible="{Binding ShowDiff}">
+                                                                <TextBlock Text=" · " FontSize="10.5"
+                                                                           Foreground="{Binding Tokens.TextMute}" />
+                                                                <TextBlock Text="{Binding AddText}" FontSize="10.5"
+                                                                           Foreground="{Binding Tokens.Ok}"
+                                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                                                                <TextBlock Text=" " FontSize="10.5" />
+                                                                <TextBlock Text="{Binding DelText}" FontSize="10.5"
+                                                                           Foreground="{Binding Tokens.Err}"
+                                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                                                            </StackPanel>
+                                                            <StackPanel Orientation="Horizontal" IsVisible="{Binding HasPr}">
+                                                                <TextBlock Text=" · " FontSize="10.5"
+                                                                           Foreground="{Binding Tokens.TextMute}" />
+                                                                <TextBlock Text="{Binding PrText}" FontSize="10.5"
+                                                                           Foreground="{Binding Tokens.TextMute}"
+                                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <Border Grid.Column="2" MinWidth="14" Height="14"
+                                                            CornerRadius="7" Padding="4,0"
+                                                            Background="{Binding Tokens.AccentMid}"
+                                                            IsVisible="{Binding HasUnread}"
+                                                            VerticalAlignment="Top" Margin="0,3,0,0">
+                                                        <TextBlock Text="{Binding Unread}"
+                                                                   Foreground="{Binding Tokens.AccentBrush}"
+                                                                   FontSize="10" FontWeight="Bold"
+                                                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                                   VerticalAlignment="Center"
+                                                                   HorizontalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.RowSpan="2" Width="1" HorizontalAlignment="Right"
+                Background="{Binding Tokens.Border}" />
+    </Grid>
+</UserControl>

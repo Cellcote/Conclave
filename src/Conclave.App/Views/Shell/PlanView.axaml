@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.PlanView"
+             x:DataType="vm:ShellVm">
+    <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*">
+        <!-- Header: "Current plan · X of Y complete" + 4px progress bar -->
+        <StackPanel Grid.Row="0" Margin="30,18,30,10" Spacing="10">
+            <TextBlock Text="{Binding ActiveSession.PlanHeader, FallbackValue='No plan yet'}"
+                       FontSize="13" FontWeight="Medium"
+                       Foreground="{Binding Tokens.TextDim}" />
+
+            <!-- 4px progress bar: track + accent fill -->
+            <Grid IsVisible="{Binding ActiveSession.HasPlan, FallbackValue=False}"
+                  Height="4" HorizontalAlignment="Stretch">
+                <Border Background="{Binding Tokens.Panel}" CornerRadius="2" />
+                <Border HorizontalAlignment="Left"
+                        Width="{Binding $parent[Grid].Bounds.Width}"
+                        Background="{Binding Tokens.AccentBrush}" CornerRadius="2"
+                        RenderTransformOrigin="0,0">
+                    <Border.RenderTransform>
+                        <ScaleTransform ScaleX="{Binding ActiveSession.PlanProgress, FallbackValue=0}" />
+                    </Border.RenderTransform>
+                </Border>
+            </Grid>
+        </StackPanel>
+
+        <!-- Empty state -->
+        <Border Grid.Row="1"
+                IsVisible="{Binding !ActiveSession.HasPlan, FallbackValue=True}"
+                Padding="30,32" HorizontalAlignment="Center" VerticalAlignment="Top">
+            <StackPanel HorizontalAlignment="Center" Spacing="8" MaxWidth="420">
+                <TextBlock Text="No plan yet"
+                           FontSize="14" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.Text}"
+                           HorizontalAlignment="Center" />
+                <TextBlock FontSize="12.5" Foreground="{Binding Tokens.TextDim}"
+                           TextAlignment="Center" TextWrapping="Wrap" LineHeight="19"
+                           Text="When Claude uses TodoWrite to plan the work, its tasks appear here as a live checklist." />
+            </StackPanel>
+        </Border>
+
+        <!-- Checklist -->
+        <ScrollViewer Grid.Row="1" Padding="30,6,30,18" HorizontalScrollBarVisibility="Disabled"
+                      IsVisible="{Binding ActiveSession.HasPlan, FallbackValue=False}">
+            <ItemsControl ItemsSource="{Binding ActiveSession.Plan}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PlanItemVm">
+                        <Border Padding="12,10"
+                                CornerRadius="{Binding Tokens.RadSmCorner}"
+                                BorderThickness="1">
+                            <!-- Per-state styling via toggled child panels keeps the template
+                                 simple (no triggers). Only one of the three is visible. -->
+                            <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="12">
+                                <!-- DONE marker -->
+                                <Panel Grid.Column="0" Width="16" Height="16"
+                                       IsVisible="{Binding IsCompleted}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Ellipse Fill="{Binding Tokens.Ok}" />
+                                    <TextBlock Text="✓" FontSize="10" FontWeight="Bold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Panel>
+                                <!-- DOING marker -->
+                                <Panel Grid.Column="0" Width="16" Height="16"
+                                       IsVisible="{Binding IsInProgress}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Ellipse Stroke="{Binding Tokens.AccentBrush}" StrokeThickness="2" />
+                                    <Ellipse Width="6" Height="6" Fill="{Binding Tokens.AccentBrush}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Panel>
+                                <!-- TODO marker -->
+                                <Panel Grid.Column="0" Width="16" Height="16"
+                                       IsVisible="{Binding IsPending}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Ellipse Stroke="{Binding Tokens.BorderHi}" StrokeThickness="1.5" />
+                                </Panel>
+
+                                <!-- Label -->
+                                <TextBlock Grid.Column="1" Text="{Binding Content}"
+                                           FontSize="13.5" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Grid.Column="2" Text="in progress"
+                                           FontSize="11"
+                                           Foreground="{Binding Tokens.AccentBrush}"
+                                           VerticalAlignment="Center"
+                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                           IsVisible="{Binding IsInProgress}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

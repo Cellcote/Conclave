@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.EmptyState"
+             x:DataType="vm:ShellVm">
+    <Border Background="{Binding Tokens.Bg}">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440" Spacing="14">
+            <!-- Dashed outline + glyph -->
+            <Panel Width="64" Height="64" HorizontalAlignment="Center">
+                <Rectangle Stroke="{Binding Tokens.BorderHi}" StrokeThickness="1"
+                           StrokeDashArray="3,3"
+                           RadiusX="{Binding Tokens.RadLg}" RadiusY="{Binding Tokens.RadLg}" />
+                <TextBlock Text="◱" FontSize="26"
+                           Foreground="{Binding Tokens.TextMute}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Panel>
+
+            <TextBlock Text="No sessions yet" FontSize="18" FontWeight="SemiBold"
+                       Foreground="{Binding Tokens.Text}"
+                       HorizontalAlignment="Center" LetterSpacing="-0.4" />
+
+            <TextBlock FontSize="13" Foreground="{Binding Tokens.TextDim}"
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                       LineHeight="20"
+                       Text="Create a session from any git repo to start a conversation with claude. Each session lives in its own worktree, so parallel work never steps on itself." />
+
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,6,0,0">
+                <Button Content="New session" Click="OnNewSession"
+                        Padding="14,6" FontSize="12.5" FontWeight="SemiBold"
+                        Background="{Binding Tokens.Text}" Foreground="{Binding Tokens.Bg}"
+                        BorderThickness="0"
+                        CornerRadius="{Binding Tokens.RadSmCorner}" />
+                <Button Content="Import from running claude" IsEnabled="False"
+                        Padding="14,6" FontSize="12.5" FontWeight="Medium"
+                        Background="Transparent"
+                        BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                        Foreground="{Binding Tokens.TextDim}"
+                        CornerRadius="{Binding Tokens.RadSmCorner}" />
+            </StackPanel>
+
+            <TextBlock HorizontalAlignment="Center"
+                       FontSize="11.5" FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                       Foreground="{Binding Tokens.TextMute}"
+                       Text="⌘N new session  ·  ⌘K command palette" />
+        </StackPanel>
+    </Border>
+</UserControl>

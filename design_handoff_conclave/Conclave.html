@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Conclave</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: #1a1816;
+    overflow: hidden;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  #stage {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="stage"><div id="root"></div></div>
+
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="window.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="variant-b-full.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "scenario": "terminal",
+  "theme": "dark",
+  "accent": "cool",
+  "font": "inter",
+  "density": 1,
+  "radius": 1,
+  "sidebarWidth": 264,
+  "rightPanel": true,
+  "toolStyle": "pill"
+}/*EDITMODE-END*/;
+
+const APP_W = 1440;
+const APP_H = 900;
+
+function ScaledWindow({ children }) {
+  const [scale, setScale] = React.useState(1);
+  React.useEffect(() => {
+    const fit = () => {
+      const pad = 48;
+      const s = Math.min(
+        (window.innerWidth - pad) / APP_W,
+        (window.innerHeight - pad) / APP_H,
+        1
+      );
+      setScale(s);
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+  return (
+    <div style={{ width: APP_W * scale, height: APP_H * scale }}>
+      <ConclaveWindow width={APP_W} height={APP_H} scale={scale}>
+        {children}
+      </ConclaveWindow>
+    </div>
+  );
+}
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  return (
+    <>
+      <ScaledWindow>
+        <VariantBFull
+          theme={t.theme}
+          accent={t.accent}
+          font={t.font}
+          density={t.density}
+          radius={t.radius}
+          sidebarWidth={t.sidebarWidth}
+          rightPanel={t.rightPanel}
+          toolStyle={t.toolStyle}
+          scenario={t.scenario}
+        />
+      </ScaledWindow>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection label="Scenario" />
+        <TweakSelect label="State"
+          value={t.scenario}
+          options={[
+            { value: 'terminal',    label: 'Active terminal' },
+            { value: 'plan',        label: 'Plan view' },
+            { value: 'logs',        label: 'Logs view' },
+            { value: 'error',       label: 'Session with error' },
+            { value: 'permission',  label: 'Permission prompt' },
+            { value: 'new-session', label: 'New-session flow' },
+            { value: 'empty',       label: 'Empty project' },
+          ]}
+          onChange={v => setTweak('scenario', v)} />
+
+        <TweakSection label="Theme" />
+        <TweakRadio label="Mode"
+          value={t.theme}
+          options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]}
+          onChange={v => setTweak('theme', v)} />
+        <TweakSelect label="Accent"
+          value={t.accent}
+          options={[
+            { value: 'cool',    label: 'Cool blue' },
+            { value: 'orange',  label: 'Clay (Claude)' },
+            { value: 'cream',   label: 'Cream' },
+            { value: 'green',   label: 'Green' },
+            { value: 'magenta', label: 'Magenta' },
+          ]}
+          onChange={v => setTweak('accent', v)} />
+
+        <TweakSection label="Typography" />
+        <TweakSelect label="Font"
+          value={t.font}
+          options={[
+            { value: 'inter',   label: 'Inter' },
+            { value: 'geist',   label: 'Geist' },
+            { value: 'ibmPlex', label: 'IBM Plex Sans' },
+            { value: 'sfpro',   label: 'SF Pro (system)' },
+          ]}
+          onChange={v => setTweak('font', v)} />
+
+        <TweakSection label="Shape" />
+        <TweakRadio label="Density"
+          value={t.density}
+          options={[{ value: 0, label: 'Cozy' }, { value: 1, label: 'Normal' }, { value: 2, label: 'Dense' }]}
+          onChange={v => setTweak('density', v)} />
+        <TweakRadio label="Radius"
+          value={t.radius}
+          options={[{ value: 0, label: 'Sharp' }, { value: 1, label: 'Medium' }, { value: 2, label: 'Soft' }]}
+          onChange={v => setTweak('radius', v)} />
+
+        <TweakSection label="Layout" />
+        <TweakSlider label="Sidebar width" value={t.sidebarWidth} min={200} max={360} step={4} unit="px"
+          onChange={v => setTweak('sidebarWidth', v)} />
+        <TweakToggle label="Right panel"
+          value={t.rightPanel}
+          onChange={v => setTweak('rightPanel', v)} />
+
+        <TweakSection label="Tool calls" />
+        <TweakRadio label="Style"
+          value={t.toolStyle}
+          options={[{ value: 'pill', label: 'Compact' }, { value: 'card', label: 'Expanded' }]}
+          onChange={v => setTweak('toolStyle', v)} />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

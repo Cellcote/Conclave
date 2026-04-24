@@ -1,0 +1,40 @@
+# --- .NET build output ---
+bin/
+obj/
+*.user
+*.suo
+*.binlog
+
+# --- IDE / editor noise ---
+.vs/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- macOS ---
+.DS_Store
+
+# --- NuGet ---
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# --- Test output ---
+TestResults/
+*.trx
+coverage*.xml
+*.coverage
+
+# --- Conclave-specific ---
+# Smoke-test scratch dirs (created under /tmp by --smoke-* runs).
+# (Already outside the repo; documented here so contributors know.)
+
+# Local launch / debug artifacts
+*.log
+launchSettings.json
+
+# Avalonia AOT / publish output
+publish/
+*.app/

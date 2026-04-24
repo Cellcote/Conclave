@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.LogsView"
+             x:DataType="vm:ShellVm">
+    <Grid Background="{Binding Tokens.Bg}">
+        <!-- Empty hint -->
+        <Border Padding="30,28" VerticalAlignment="Top" HorizontalAlignment="Center"
+                IsVisible="{Binding ActiveSession.Logs.Count, Converter={x:Static vm:CountIsZeroConverter.Instance}, FallbackValue=True}">
+            <StackPanel HorizontalAlignment="Center" Spacing="6" MaxWidth="380">
+                <TextBlock Text="No logs yet"
+                           FontSize="14" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.Text}"
+                           HorizontalAlignment="Center" />
+                <TextBlock FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                           TextAlignment="Center" TextWrapping="Wrap" LineHeight="19"
+                           Text="Session lifecycle events, stream events from Claude, and errors will appear here as the session runs." />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer x:Name="LogsScroller" Padding="14,10,14,14"
+                      HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding ActiveSession.Logs}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="1" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LogLineVm">
+                        <Grid ColumnDefinitions="96,30,*">
+                            <TextBlock Text="{Binding TimestampText}" FontSize="11.5"
+                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                       Foreground="{Binding Tokens.TextMute}" LineHeight="20" />
+                            <TextBlock Grid.Column="1" Text="{Binding LevelText}" FontSize="11.5"
+                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                       FontWeight="SemiBold"
+                                       Foreground="{Binding LevelBrush}" LineHeight="20" />
+                            <TextBlock Grid.Column="2" Text="{Binding Message}" FontSize="11.5"
+                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                       Foreground="{Binding Tokens.Text}"
+                                       LineHeight="20" TextWrapping="Wrap" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

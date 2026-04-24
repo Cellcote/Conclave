@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+        xmlns:shell="clr-namespace:Conclave.App.Views.Shell"
+        x:Class="Conclave.App.MainWindow"
+        x:DataType="vm:ShellVm"
+        Title="Conclave"
+        Width="1320" Height="820"
+        Background="{Binding Tokens.Bg}">
+    <Panel>
+        <Grid ColumnDefinitions="264,*,320" RowDefinitions="38,*">
+            <shell:TitleBar Grid.Row="0" Grid.ColumnSpan="3" />
+            <shell:Sidebar Grid.Row="1" Grid.Column="0" />
+            <shell:MainPane Grid.Row="1" Grid.Column="1" IsVisible="{Binding HasActiveSession}" />
+            <shell:EmptyState Grid.Row="1" Grid.Column="1" IsVisible="{Binding !HasActiveSession}" />
+            <shell:RightPanel Grid.Row="1" Grid.Column="2"
+                              IsVisible="{Binding HasActiveSession}" />
+        </Grid>
+        <shell:NewSessionModal />
+    </Panel>
+</Window>

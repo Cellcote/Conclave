@@ -1,0 +1,235 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             xmlns:shell="clr-namespace:Conclave.App.Views.Shell"
+             x:Class="Conclave.App.Views.Shell.MainPane"
+             x:DataType="vm:ShellVm">
+    <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*,Auto">
+
+        <!-- Header -->
+        <Border Grid.Row="0" BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
+                Padding="28,12,24,14">
+            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="{Binding ActiveSession.Title, FallbackValue=''}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.Text}"
+                               TextTrimming="CharacterEllipsis" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3,0,0">
+                        <Border Width="6" Height="6" CornerRadius="3"
+                                Background="{Binding ActiveSession.StatusColor}"
+                                VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveSession.StatusLabel}" FontSize="12"
+                                   Foreground="{Binding Tokens.TextDim}" VerticalAlignment="Center" />
+                        <TextBlock Text="·" Foreground="{Binding Tokens.TextMute}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveSession.Branch}" FontSize="11.5"
+                                   Foreground="{Binding Tokens.TextDim}"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="·" Foreground="{Binding Tokens.TextMute}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveSession.Model}" FontSize="12"
+                                   Foreground="{Binding Tokens.TextDim}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="8"
+                                    IsVisible="{Binding ActiveSession.HasPr}">
+                            <TextBlock Text="·" Foreground="{Binding Tokens.TextMute}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ActiveSession.PrText}" FontSize="11.5"
+                                       Foreground="{Binding Tokens.TextDim}"
+                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Segmented control -->
+                <Border Grid.Column="1" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                        CornerRadius="{Binding Tokens.RadMdCorner}" Padding="2"
+                        Background="{Binding Tokens.Panel}" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}"
+                                BorderThickness="1" Name="SegTerminal"
+                                PointerPressed="OnSegTerminal"
+                                IsVisible="{Binding IsTerminalView}">
+                            <TextBlock Text="Terminal" FontSize="12" FontWeight="Medium"
+                                       Foreground="{Binding Tokens.Text}" />
+                        </Border>
+                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                BorderThickness="1" BorderBrush="Transparent"
+                                PointerPressed="OnSegTerminal"
+                                IsVisible="{Binding !IsTerminalView}">
+                            <TextBlock Text="Terminal" FontSize="12" FontWeight="Medium"
+                                       Foreground="{Binding Tokens.TextDim}" />
+                        </Border>
+
+                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}"
+                                BorderThickness="1"
+                                PointerPressed="OnSegPlan"
+                                IsVisible="{Binding IsPlanView}">
+                            <TextBlock Text="Plan" FontSize="12" FontWeight="Medium"
+                                       Foreground="{Binding Tokens.Text}" />
+                        </Border>
+                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                BorderThickness="1" BorderBrush="Transparent"
+                                PointerPressed="OnSegPlan"
+                                IsVisible="{Binding !IsPlanView}">
+                            <TextBlock Text="Plan" FontSize="12" FontWeight="Medium"
+                                       Foreground="{Binding Tokens.TextDim}" />
+                        </Border>
+
+                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                Background="{Binding Tokens.Bg}" BorderBrush="{Binding Tokens.Border}"
+                                BorderThickness="1"
+                                PointerPressed="OnSegLogs"
+                                IsVisible="{Binding IsLogsView}">
+                            <TextBlock Text="Logs" FontSize="12" FontWeight="Medium"
+                                       Foreground="{Binding Tokens.Text}" />
+                        </Border>
+                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                BorderThickness="1" BorderBrush="Transparent"
+                                PointerPressed="OnSegLogs"
+                                IsVisible="{Binding !IsLogsView}">
+                            <TextBlock Text="Logs" FontSize="12" FontWeight="Medium"
+                                       Foreground="{Binding Tokens.TextDim}" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Transcript -->
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" Padding="34,8,34,14"
+                      IsVisible="{Binding IsTerminalView}">
+            <ItemsControl ItemsSource="{Binding ActiveSession.Transcript}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TranscriptMessageVm">
+                        <StackPanel>
+                            <!-- Header row (hidden on consecutive same-role messages) -->
+                            <StackPanel Orientation="Horizontal" Spacing="6"
+                                        Margin="0,22,0,8"
+                                        IsVisible="{Binding ShowHeader}">
+                                <Border Width="6" Height="6" CornerRadius="3"
+                                        Background="{Binding Tokens.AccentBrush}"
+                                        VerticalAlignment="Center" IsVisible="{Binding IsAssistant}" />
+                                <TextBlock Text="{Binding HeaderText}" FontSize="11" FontWeight="Medium"
+                                           Foreground="{Binding Tokens.TextDim}" />
+                            </StackPanel>
+                            <!-- Body — hidden when empty so back-to-back tool-only messages
+                                 don't accumulate phantom line-height. -->
+                            <SelectableTextBlock Text="{Binding Content}" FontSize="13.5"
+                                       Foreground="{Binding Tokens.Text}"
+                                       TextWrapping="Wrap" LineHeight="21"
+                                       IsVisible="{Binding HasContent}" />
+                            <!-- Tool calls. Margin-top kept tiny so a chain of tool-only
+                                 assistant chunks reads as one tight block. -->
+                            <ItemsControl ItemsSource="{Binding Tools}" Margin="0,4,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ToolCallVm">
+                                        <!-- ColumnDefinitions: 46 Kind · * Target · Auto (bounded) status+meta.
+                                             Meta MaxWidth keeps it from eating the target column on long
+                                             permission-request messages. -->
+                                        <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                                CornerRadius="{Binding Tokens.RadSmCorner}" Padding="10,6">
+                                            <Grid ColumnDefinitions="46,*,Auto" ColumnSpacing="10">
+                                                <TextBlock Text="{Binding Kind}" FontSize="10"
+                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                           Foreground="{Binding Tokens.TextDim}"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Target}"
+                                                           FontSize="11.5"
+                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                           Foreground="{Binding Tokens.Text}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                            Spacing="6" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusGlyph}" FontSize="11.5"
+                                                               Foreground="{Binding StatusBrush}" />
+                                                    <TextBlock Text="{Binding Meta}" FontSize="11.5"
+                                                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                               Foreground="{Binding Tokens.TextDim}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="200" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Plan view -->
+        <ContentControl Grid.Row="1" IsVisible="{Binding IsPlanView}">
+            <shell:PlanView />
+        </ContentControl>
+        <!-- Logs view -->
+        <ContentControl Grid.Row="1" IsVisible="{Binding IsLogsView}">
+            <shell:LogsView />
+        </ContentControl>
+
+        <!-- Composer -->
+        <Border Grid.Row="2" Margin="28,6,28,24"
+                BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadMdCorner}" Background="{Binding Tokens.Panel}"
+                Padding="18,16,14,14">
+            <StackPanel Spacing="14">
+                <TextBox x:Name="ComposerBox"
+                         Text="{Binding ComposerDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="Continue the session…"
+                         FontSize="13.5"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         MinHeight="36" MaxHeight="220"
+                         Padding="0"
+                         IsEnabled="{Binding HasActiveSession}"
+                         KeyDown="OnComposerKeyDown" />
+
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                    <Border Grid.Column="0" Padding="6,3" BorderBrush="{Binding Tokens.Border}"
+                            BorderThickness="1" CornerRadius="{Binding Tokens.RadXsCorner}" Margin="0,0,6,0">
+                        <TextBlock Text="@ file" FontSize="11" Foreground="{Binding Tokens.TextDim}" />
+                    </Border>
+                    <Border Grid.Column="1" Padding="6,3" BorderBrush="{Binding Tokens.Border}"
+                            BorderThickness="1" CornerRadius="{Binding Tokens.RadXsCorner}" Margin="0,0,6,0">
+                        <TextBlock Text="/plan" FontSize="11" Foreground="{Binding Tokens.TextDim}"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                    </Border>
+                    <Border Grid.Column="2" Padding="6,3" BorderBrush="{Binding Tokens.Border}"
+                            BorderThickness="1" CornerRadius="{Binding Tokens.RadXsCorner}">
+                        <TextBlock Text="{Binding ActiveSession.Model, FallbackValue='Sonnet 4.5'}"
+                                   FontSize="11" Foreground="{Binding Tokens.TextDim}" />
+                    </Border>
+                    <TextBlock Grid.Column="4" Text="⏎" FontSize="11"
+                               Foreground="{Binding Tokens.TextMute}"
+                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                               VerticalAlignment="Center" Margin="0,0,10,0"
+                               IsVisible="{Binding !ActiveSession.IsBusy, FallbackValue=True}" />
+                    <Button Grid.Column="5" Content="Send" Click="OnComposerSend"
+                            IsEnabled="{Binding CanSend}"
+                            IsVisible="{Binding !ActiveSession.IsBusy, FallbackValue=True}"
+                            Padding="12,5" FontSize="12" FontWeight="SemiBold"
+                            Background="{Binding Tokens.Text}" Foreground="{Binding Tokens.Bg}"
+                            BorderThickness="0"
+                            CornerRadius="{Binding Tokens.RadSmCorner}" />
+                    <Button Grid.Column="5" Content="Stop" Click="OnComposerStop"
+                            IsVisible="{Binding ActiveSession.IsBusy, FallbackValue=False}"
+                            Padding="12,5" FontSize="12" FontWeight="SemiBold"
+                            Background="Transparent"
+                            BorderBrush="{Binding Tokens.Err}" BorderThickness="1"
+                            Foreground="{Binding Tokens.Err}"
+                            CornerRadius="{Binding Tokens.RadSmCorner}" />
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
