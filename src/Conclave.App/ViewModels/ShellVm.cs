@@ -117,6 +117,42 @@ public sealed class ShellVm : Views.Observable
     public bool HasSearchQuery => !string.IsNullOrEmpty(_searchQuery);
     public void ClearSearch() => SearchQuery = "";
 
+    // --- Toast (transient error/info banner) ---
+
+    private string? _toastMessage;
+    public string? ToastMessage
+    {
+        get => _toastMessage;
+        private set { if (Set(ref _toastMessage, value)) Notify(nameof(IsToastVisible)); }
+    }
+    public bool IsToastVisible => !string.IsNullOrEmpty(_toastMessage);
+
+    private CancellationTokenSource? _toastCts;
+
+    // Show a transient error message at the bottom of the main pane. Auto-clears after
+    // a few seconds. Subsequent calls cancel the previous timer and replace the text.
+    public void ShowError(string message)
+    {
+        ToastMessage = message;
+        _toastCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _toastCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(5000, cts.Token);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(_toastCts, cts)) ToastMessage = null;
+                });
+            }
+            catch (TaskCanceledException) { /* superseded by a newer toast */ }
+        });
+    }
+
+    public void DismissToast() => ToastMessage = null;
+
     // --- Composer ---
 
     private string _composerDraft = "";

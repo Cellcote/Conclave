@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.Toast"
+             x:DataType="vm:ShellVm"
+             IsHitTestVisible="{Binding IsToastVisible}">
+    <Border IsVisible="{Binding IsToastVisible}"
+            VerticalAlignment="Top" HorizontalAlignment="Center"
+            Margin="0,52,0,0" MaxWidth="640"
+            BorderBrush="{Binding Tokens.Err}" BorderThickness="1"
+            CornerRadius="{Binding Tokens.RadMdCorner}"
+            Background="{Binding Tokens.Panel}"
+            Padding="16,12">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="40" OffsetY="12" Opacity="0.35" Color="Black" />
+        </Border.Effect>
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+            <Border Width="6" Height="6" CornerRadius="3"
+                    Background="{Binding Tokens.Err}"
+                    VerticalAlignment="Center" />
+            <SelectableTextBlock Grid.Column="1" Text="{Binding ToastMessage}"
+                                 FontSize="13" Foreground="{Binding Tokens.Text}"
+                                 TextWrapping="Wrap" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="✕" FontSize="11"
+                       Foreground="{Binding Tokens.TextDim}"
+                       VerticalAlignment="Center" Cursor="Hand"
+                       PointerPressed="OnDismissPressed" />
+        </Grid>
+    </Border>
+</UserControl>

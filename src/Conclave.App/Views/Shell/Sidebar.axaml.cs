@@ -97,7 +97,7 @@ public partial class Sidebar : UserControl
         if (!string.IsNullOrEmpty(trimmed) && trimmed != s.Title)
         {
             try { shell.Manager.RenameSession(s, trimmed); }
-            catch (Exception ex) { Console.Error.WriteLine($"rename failed: {ex.Message}"); }
+            catch (Exception ex) { shell.ShowError($"Rename failed: {ex.Message}"); }
         }
         s.IsEditing = false;
     }
@@ -164,7 +164,7 @@ public partial class Sidebar : UserControl
         if (!string.IsNullOrEmpty(trimmed) && trimmed != p.Name)
         {
             try { shell.Manager.RenameProject(p, trimmed); }
-            catch (Exception ex) { Console.Error.WriteLine($"rename project failed: {ex.Message}"); }
+            catch (Exception ex) { shell.ShowError($"Rename project failed: {ex.Message}"); }
         }
         p.IsEditing = false;
     }
@@ -196,7 +196,7 @@ public partial class Sidebar : UserControl
             if (ReferenceEquals(shell.ActiveSession, s))
                 shell.ActiveSession = null;
         }
-        catch (Exception ex) { Console.Error.WriteLine($"delete session failed: {ex.Message}"); }
+        catch (Exception ex) { shell.ShowError($"Delete session failed: {ex.Message}"); }
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);

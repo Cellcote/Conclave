@@ -17,5 +17,6 @@
                               IsVisible="{Binding HasActiveSession}" />
         </Grid>
         <shell:NewSessionModal />
+        <shell:Toast />
     </Panel>
 </Window>
