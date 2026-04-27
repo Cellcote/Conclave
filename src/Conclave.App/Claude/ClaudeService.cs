@@ -149,6 +149,8 @@ public sealed class ClaudeService
                 Log(session, finalStatus == SessionStatus.Error ? LogLevel.Err : LogLevel.Inf,
                     $"Turn completed ({res.StopReason ?? "unknown"}){ms}{cost}");
                 _manager.UpdateStatus(session, finalStatus);
+                // Accumulate per-session cost — ResultEvent gives us the per-turn USD total.
+                if (res.TotalCostUsd is { } turnCost) _manager.AddCost(session, turnCost);
                 // Claude may have edited files or created/updated a PR during the turn.
                 _manager.RefreshDiff(session);
                 _manager.RefreshPr(session);

@@ -63,6 +63,9 @@ public sealed class Database : IDisposable
         (5, """
             ALTER TABLE sessions ADD COLUMN permission_mode TEXT NOT NULL DEFAULT 'default';
             """),
+        (6, """
+            ALTER TABLE sessions ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0;
+            """),
     };
 
     static Database()
@@ -199,6 +202,11 @@ public sealed class Database : IDisposable
     public void UpdateSessionPermissionMode(string id, string mode) =>
         _conn.Execute("UPDATE sessions SET permission_mode = @mode WHERE id = @id;",
             new { id, mode });
+
+    public void AddSessionCost(string id, double delta) =>
+        _conn.Execute(
+            "UPDATE sessions SET total_cost_usd = total_cost_usd + @delta WHERE id = @id;",
+            new { id, delta });
 
     // --- Messages (transcript) ---
 

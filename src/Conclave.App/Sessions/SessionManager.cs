@@ -78,6 +78,7 @@ public sealed class SessionManager : IDisposable
         vm.Title = s.Name;
         vm.ClaudeSessionId = s.ClaudeSessionId;
         vm.PermissionMode = string.IsNullOrEmpty(s.PermissionMode) ? "default" : s.PermissionMode;
+        vm.TotalCostUsd = s.TotalCostUsd;
 
         // Restore Plan state if claude has ever run TodoWrite for this session.
         if (!string.IsNullOrEmpty(s.PlanJson))
@@ -236,6 +237,13 @@ public sealed class SessionManager : IDisposable
     {
         _db.UpdateSessionPermissionMode(s.Id, mode);
         s.PermissionMode = mode;
+    }
+
+    public void AddCost(SessionVm s, double delta)
+    {
+        if (delta <= 0) return;
+        _db.AddSessionCost(s.Id, delta);
+        s.TotalCostUsd += delta;
     }
 
     // --- Transcript persistence ---

@@ -27,4 +27,6 @@ public sealed record Session
     public string? PlanJson { get; init; }
     // "default" | "acceptEdits" | "bypassPermissions" — the CLI value we pass through.
     public string PermissionMode { get; init; } = "default";
+    // Running total of TotalCostUsd accumulated across every result event for this session.
+    public double TotalCostUsd { get; init; }
 }

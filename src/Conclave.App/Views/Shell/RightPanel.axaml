@@ -88,13 +88,33 @@
                                    TextAlignment="Right" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
 
+                    <DockPanel LastChildFill="True"
+                               IsVisible="{Binding ActiveSession.HasCost}">
+                        <TextBlock DockPanel.Dock="Left" Text="Cost"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding ActiveSession.TotalCostFormatted}" FontSize="12"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   Foreground="{Binding Tokens.Text}"
+                                   TextAlignment="Right" />
+                    </DockPanel>
+
                     <DockPanel LastChildFill="True">
                         <TextBlock DockPanel.Dock="Left" Text="Permissions"
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Center"
                                    Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.PermissionModeDisplay}" FontSize="12"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
+                        <ComboBox x:Name="PermissionPicker"
+                                  SelectedItem="{Binding ActiveSession.PermissionMode, Mode=OneWay}"
+                                  SelectionChanged="OnPermissionModeChanged"
+                                  HorizontalAlignment="Right" MinWidth="0"
+                                  FontSize="12" Padding="8,2"
+                                  Background="Transparent"
+                                  BorderBrush="{Binding Tokens.Border}" BorderThickness="1">
+                            <ComboBoxItem Content="default" />
+                            <ComboBoxItem Content="acceptEdits" />
+                            <ComboBoxItem Content="bypassPermissions" />
+                        </ComboBox>
                     </DockPanel>
                 </StackPanel>
 
