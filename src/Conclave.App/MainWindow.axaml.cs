@@ -28,6 +28,16 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // macOS-only: extend our content under the title bar so the native traffic
+        // lights sit inside the Avalonia window. Windows + Linux keep their default
+        // system chrome — mixing custom + system chrome there tends to look off.
+        if (OperatingSystem.IsMacOS())
+        {
+            ExtendClientAreaToDecorationsHint = true;
+            ExtendClientAreaTitleBarHeightHint = -1;
+        }
+
         var tokens = Tokens.DarkCoolNormalMedium();
         _manager = SessionManager.Open(tokens);
 

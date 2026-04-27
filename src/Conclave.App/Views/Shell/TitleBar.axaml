@@ -4,8 +4,10 @@
              x:Class="Conclave.App.Views.Shell.TitleBar"
              x:DataType="vm:ShellVm"
              Height="38">
-    <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
-            Background="{Binding Tokens.Bg}">
+    <Border x:Name="DragHandle"
+            BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
+            Background="{Binding Tokens.Bg}"
+            PointerPressed="OnTitleBarPressed">
         <Grid ColumnDefinitions="80,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto"
               VerticalAlignment="Center">
             <!-- Brand mark -->
