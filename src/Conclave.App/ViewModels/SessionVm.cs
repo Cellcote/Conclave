@@ -119,9 +119,7 @@ public sealed class SessionVm : Views.Observable
         get => _totalCostUsd;
         set { if (Set(ref _totalCostUsd, value)) Notify(nameof(TotalCostFormatted)); }
     }
-    // Always shows 4 decimals (sub-cent precision matters when each turn is a few hundredths
-    // of a cent). Hidden in the right panel when 0.
-    public string TotalCostFormatted => $"${_totalCostUsd:0.0000}";
+    public string TotalCostFormatted => $"${_totalCostUsd:0.00}";
     public bool HasCost => _totalCostUsd > 0;
 
     public IBrush BackgroundBrush => _isActive ? Tokens.Panel : Brushes.Transparent;
