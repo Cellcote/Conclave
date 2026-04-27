@@ -124,7 +124,7 @@ public sealed class SessionVm : Views.Observable
     public string TotalCostFormatted => $"${_totalCostUsd:0.0000}";
     public bool HasCost => _totalCostUsd > 0;
 
-    public IBrush? BackgroundBrush => _isActive ? Tokens.Panel : null;
+    public IBrush BackgroundBrush => _isActive ? Tokens.Panel : Brushes.Transparent;
     public IBrush TitleBrush => _isActive ? Tokens.Text : Tokens.TextDim;
     public FontWeight TitleFontWeight => _isActive ? FontWeight.Medium : FontWeight.Normal;
 

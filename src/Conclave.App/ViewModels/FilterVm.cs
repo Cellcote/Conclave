@@ -30,7 +30,7 @@ public sealed class FilterVm : Views.Observable
         }
     }
 
-    public IBrush? BackgroundBrush => _isSelected ? Tokens.Panel : null;
+    public IBrush BackgroundBrush => _isSelected ? Tokens.Panel : Brushes.Transparent;
     public IBrush TextBrush => _isSelected ? Tokens.Text : Tokens.TextDim;
     public Avalonia.Media.FontWeight FontWeight =>
         _isSelected ? Avalonia.Media.FontWeight.Medium : Avalonia.Media.FontWeight.Normal;
