@@ -162,9 +162,23 @@ public sealed class ShellVm : Views.Observable
         set { if (Set(ref _composerDraft, value)) Notify(nameof(CanSend)); }
     }
 
+    // Files dropped into the composer. Surfaced as pills below the input; cleared on Send.
+    public ObservableCollection<AttachmentVm> ComposerAttachments { get; } = new();
+    public bool HasComposerAttachments => ComposerAttachments.Count > 0;
+
     public bool CanSend =>
         _activeSession is { IsBusy: false }
-        && !string.IsNullOrWhiteSpace(_composerDraft);
+        && (!string.IsNullOrWhiteSpace(_composerDraft) || ComposerAttachments.Count > 0);
+
+    public void AddAttachment(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        foreach (var existing in ComposerAttachments)
+            if (string.Equals(existing.Path, path, StringComparison.Ordinal)) return;
+        ComposerAttachments.Add(new AttachmentVm(Tokens, path));
+    }
+
+    public void RemoveAttachment(AttachmentVm attachment) => ComposerAttachments.Remove(attachment);
 
     // Fired when the user hits Send. Whoever wires this (ClaudeService) is responsible
     // for appending the user message, running the turn, and updating transcript + status.
@@ -175,6 +189,14 @@ public sealed class ShellVm : Views.Observable
         if (!CanSend || _activeSession is null) return;
         var session = _activeSession;
         var draft = _composerDraft.TrimEnd();
+        // The CLI's @-mention syntax inlines file contents; prefix attachments so the
+        // model sees them as context before the prompt.
+        if (ComposerAttachments.Count > 0)
+        {
+            var refs = string.Join(' ', ComposerAttachments.Select(a => "@" + a.Path));
+            draft = draft.Length == 0 ? refs : refs + "\n\n" + draft;
+            ComposerAttachments.Clear();
+        }
         ComposerDraft = "";
         var handler = SendRequested;
         if (handler is not null) await handler(session, draft);
@@ -205,6 +227,12 @@ public sealed class ShellVm : Views.Observable
         }
 
         ApplyFilter();
+
+        ComposerAttachments.CollectionChanged += (_, _) =>
+        {
+            Notify(nameof(HasComposerAttachments));
+            Notify(nameof(CanSend));
+        };
 
         // Default selection: first session we find that's currently visible.
         foreach (var p in Manager.Projects)

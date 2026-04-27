@@ -178,10 +178,11 @@
         </ContentControl>
 
         <!-- Composer -->
-        <Border Grid.Row="2" Margin="28,6,28,24"
+        <Border Grid.Row="2" x:Name="ComposerBorder" Margin="28,6,28,24"
                 BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
                 CornerRadius="{Binding Tokens.RadMdCorner}" Background="{Binding Tokens.Panel}"
-                Padding="18,16,14,14">
+                Padding="18,16,14,14"
+                DragDrop.AllowDrop="True">
             <StackPanel Spacing="14">
                 <TextBox x:Name="ComposerBox"
                          Text="{Binding ComposerDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -194,6 +195,39 @@
                          Padding="0"
                          IsEnabled="{Binding HasActiveSession}"
                          KeyDown="OnComposerKeyDown" />
+
+                <ItemsControl ItemsSource="{Binding ComposerAttachments}"
+                              IsVisible="{Binding HasComposerAttachments}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AttachmentVm">
+                            <Border Margin="0,0,6,6" Padding="8,3,4,3"
+                                    BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                                    CornerRadius="{Binding Tokens.RadXsCorner}"
+                                    Background="{Binding Tokens.Panel2}">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <TextBlock Text="📎" FontSize="11"
+                                               Foreground="{Binding Tokens.TextDim}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding FileName}" FontSize="11.5"
+                                               Foreground="{Binding Tokens.Text}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxWidth="220"
+                                               VerticalAlignment="Center" />
+                                    <Button Content="✕" FontSize="10"
+                                            Padding="4,0" MinWidth="0" MinHeight="0"
+                                            Background="Transparent" BorderThickness="0"
+                                            Foreground="{Binding Tokens.TextMute}"
+                                            Click="OnRemoveAttachment" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
                     <Border Grid.Column="0" Padding="6,3" BorderBrush="{Binding Tokens.Border}"
