@@ -6,9 +6,7 @@
         x:DataType="vm:ShellVm"
         Title="Conclave"
         Width="1320" Height="820" MinWidth="640" MinHeight="480"
-        Background="{Binding Tokens.Bg}"
-        ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="-1">
+        Background="{Binding Tokens.Bg}">
     <Panel>
         <!-- Five-column layout: sidebar · splitter · main · splitter · right.
              Sidebar and right widths are pixel-sized and user-resizable via the
