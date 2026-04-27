@@ -1,45 +1,70 @@
-# Conclave — terminal spike
+# Conclave
 
-A minimal Avalonia 12 app with a custom `TerminalControl` that hosts a child
-process through a PTY, parses its VT output, and renders a terminal grid.
-This is the de-risking spike for the embedded terminal, not the full app.
+**A desktop home for your Claude Code sessions — many at once, each in its own git worktree.**
 
-## Requirements
+![Conclave](./screenshot.png)
 
-- .NET 10 SDK (the csproj targets `net10.0`)
-- macOS, Linux, or Windows
-- Optionally, the `claude` CLI on `PATH` — if absent, the app falls back to
-  your `$SHELL` on Unix or `pwsh`/`cmd` on Windows.
+---
 
-## Build and run
+## Why
+
+Running `claude` in a terminal is great for one session. It stops scaling the
+moment you want two — branches collide, prompts get lost between tabs, and
+there's no shared view of what each agent is up to.
+
+Conclave gives every Claude its own workspace, its own transcript, and its
+own live status — all in one window. Spin up parallel sessions across
+projects, follow what every agent is doing, and stop juggling branches by
+hand.
+
+## What you get
+
+- **Parallel sessions, one window.** Group by project, filter by *running*,
+  *needs attention*, or *idle*. Jump between agents without losing your
+  place.
+- **A worktree per session.** New sessions run `git worktree add` for you,
+  so branches never step on each other and you never have to stash again.
+- **Live status at a glance.** Working, waiting, running a tool, idle, or
+  errored — visible from the sidebar without opening the session.
+- **Transcript, Plan, Logs.** Three views per session. The plan view turns
+  Claude's `TodoWrite` into a real progress checklist; logs keep lifecycle
+  events out of your transcript.
+- **Embedded terminal.** Colors, paging, and most TUIs work out of the box.
+- **Pull request card.** Once the branch is pushed, Conclave picks the
+  linked PR up from `gh` and shows status, diff, and base alongside the
+  session.
+- **Themed in from day one.** Dark and light, five accents, tunable
+  density and corner radius — not bolted on later.
+
+## Try it
+
+You'll need:
+
+- **.NET 10 SDK**
+- **macOS, Linux, or Windows**
+- **`claude` CLI** on `PATH` for real sessions
+- **`git`** on `PATH`, and **`gh`** if you want PR cards
+
+Run from source:
 
 ```sh
 dotnet restore
 dotnet run --project src/Conclave.App
 ```
 
-A window opens hosting one `TerminalControl`. Click it to take focus,
-then type. `ls`, `echo`, paging, colors, and basic TUI apps should work.
+Or build a native binary:
 
-## Layout
-
-```
-src/Conclave.App/
-  Program.cs, App.axaml(.cs)        Avalonia entry
-  MainWindow.axaml(.cs)              Hosts a single TerminalControl
-  Terminal/
-    TerminalCell.cs                  Packed cell struct (codepoint + fg/bg/attrs)
-    Palette.cs                       ANSI 16 + xterm 256 color table
-    TerminalBuffer.cs                Grid, cursor, scroll region, dirty-row set
-    VtParser.cs                      Hand-rolled VT state machine
-    PtySession.cs                    Porta.Pty wrapper + read-loop channel
-    GlyphCache.cs                    Codepoint→glyph index cache + cell metrics
-    TerminalControl.cs               Custom Control — rendering and input
+```sh
+dotnet publish src/Conclave.App -c Release
 ```
 
-## Dependencies
+## Status
 
-- `Avalonia` 12.0.1 — UI
-- `Porta.Pty` 1.0.7 — cross-platform pseudo-terminal (ConPTY + POSIX)
+Active development. The shell, embedded terminal, and per-session plumbing
+are wired up; a few items in [`PHASE_4.md`](./PHASE_4.md) — transcript
+persistence across restarts, live diff stats, the cancel button, and the
+permission modal — are still in flight. Expect rough edges.
 
-See `NOTES.md` for VT feature coverage, known limits, and next steps.
+## License
+
+MIT — see [`LICENSE`](./LICENSE).
