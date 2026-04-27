@@ -115,12 +115,12 @@
                                 <TextBlock Text="{Binding HeaderText}" FontSize="11" FontWeight="Medium"
                                            Foreground="{Binding Tokens.TextDim}" />
                             </StackPanel>
-                            <!-- Body — hidden when empty so back-to-back tool-only messages
-                                 don't accumulate phantom line-height. -->
-                            <SelectableTextBlock Text="{Binding Content}" FontSize="13.5"
-                                       Foreground="{Binding Tokens.Text}"
-                                       TextWrapping="Wrap" LineHeight="21"
-                                       IsVisible="{Binding HasContent}" />
+                            <!-- Body — markdown for assistant messages, plain selectable
+                                 text for user. Hidden when empty so back-to-back tool-only
+                                 messages don't accumulate phantom line-height. -->
+                            <shell:MarkdownView Source="{Binding Content}"
+                                                Tokens="{Binding Tokens}"
+                                                IsVisible="{Binding HasContent}" />
                             <!-- Tool calls. Margin-top kept tiny so a chain of tool-only
                                  assistant chunks reads as one tight block. -->
                             <ItemsControl ItemsSource="{Binding Tools}" Margin="0,4,0,0">
