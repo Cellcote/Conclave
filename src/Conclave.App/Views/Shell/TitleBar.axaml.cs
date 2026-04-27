@@ -32,6 +32,7 @@ public partial class TitleBar : UserControl
         }
 
         window.BeginMoveDrag(e);
+        e.Handled = true;
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
