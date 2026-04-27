@@ -39,14 +39,18 @@
                                    TextAlignment="Right" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
 
+                    <!-- Worktree paths can be very long; wrap on character boundaries
+                         (mono with no spaces) instead of ellipsizing so the user can
+                         see the whole path. Aligned right to match the rest of the column. -->
                     <DockPanel LastChildFill="True">
                         <TextBlock DockPanel.Dock="Left" Text="Worktree"
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top"
                                    Margin="0,0,12,0" />
                         <TextBlock Text="{Binding ActiveSession.Worktree}" FontSize="12"
                                    FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
                                    Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
+                                   TextAlignment="Right" TextWrapping="WrapWithOverflow" />
                     </DockPanel>
 
                     <DockPanel LastChildFill="True">
