@@ -329,17 +329,17 @@ public sealed class SessionManager : IDisposable
                 ? v.GetString() ?? "" : "";
     }
 
-    private sealed record ToolCallRow(string Kind, string Target, string Meta, string Status);
-
     private static string SerializeTools(IEnumerable<ToolCallVm> tools)
     {
-        var rows = tools.Select(t => new ToolCallRow(t.Kind, t.Target, t.Meta, t.Status.ToString()));
-        return JsonSerializer.Serialize(rows);
+        var rows = tools.Select(t => new ToolCallRow(t.Kind, t.Target, t.Meta, t.Status.ToString()))
+            .ToArray();
+        return JsonSerializer.Serialize(rows, AppJsonContext.Default.ToolCallRowArray);
     }
 
     private IEnumerable<ToolCallVm> DeserializeTools(string json)
     {
-        var rows = JsonSerializer.Deserialize<ToolCallRow[]>(json) ?? Array.Empty<ToolCallRow>();
+        var rows = JsonSerializer.Deserialize(json, AppJsonContext.Default.ToolCallRowArray)
+            ?? Array.Empty<ToolCallRow>();
         foreach (var r in rows)
         {
             yield return new ToolCallVm

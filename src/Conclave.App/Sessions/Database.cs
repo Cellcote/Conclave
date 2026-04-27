@@ -1,10 +1,13 @@
-using Dapper;
 using Microsoft.Data.Sqlite;
 
 namespace Conclave.App.Sessions;
 
-// SQLite connection + migrations + Dapper-based CRUD.
-// One connection per Database instance; assumed to be used from the UI thread.
+// SQLite connection + migrations + manual CRUD. No Dapper because Dapper does runtime
+// IL emit, which trips NativeAOT trimming. Mapping is by ordinal — every SELECT lists
+// columns explicitly so the mapper indices stay stable even if a future migration adds
+// a column in the middle.
+//
+// One connection per Database instance; mutations assumed to come from the UI thread.
 public sealed class Database : IDisposable
 {
     private readonly SqliteConnection _conn;
@@ -68,11 +71,15 @@ public sealed class Database : IDisposable
             """),
     };
 
-    static Database()
-    {
-        // Map project_id → ProjectId, etc.
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
-    }
+    // Explicit column lists so ordinal mapping in Read*() stays stable.
+    private const string ProjectColumns = "id, name, path, default_branch, created_at";
+    private const string SessionColumns =
+        "id, project_id, name, branch_name, worktree_path, created_at, last_active_at, " +
+        "base_branch, model, started_utc, status, unread_count, " +
+        "pr_number, pr_state, diff_files, diff_add, diff_del, " +
+        "claude_session_id, plan_json, permission_mode, total_cost_usd";
+    private const string MessageColumns =
+        "id, session_id, role, content, tools_json, created_at, seq";
 
     private Database(SqliteConnection conn) => _conn = conn;
 
@@ -83,8 +90,8 @@ public sealed class Database : IDisposable
 
         var conn = new SqliteConnection($"Data Source={path}");
         conn.Open();
-        conn.Execute("PRAGMA foreign_keys = ON;");
-        conn.Execute("PRAGMA journal_mode = WAL;");
+        Exec(conn, "PRAGMA foreign_keys = ON;");
+        Exec(conn, "PRAGMA journal_mode = WAL;");
 
         var db = new Database(conn);
         db.Migrate();
@@ -106,6 +113,8 @@ public sealed class Database : IDisposable
         return System.IO.Path.Combine(dir, "conclave.db");
     }
 
+    public static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
     private void Migrate()
     {
         int current = CurrentVersion();
@@ -113,137 +122,259 @@ public sealed class Database : IDisposable
         {
             if (v <= current) continue;
             using var tx = _conn.BeginTransaction();
-            _conn.Execute(sql, transaction: tx);
-            _conn.Execute("UPDATE meta SET version = @v;", new { v }, tx);
+            using (var cmd = _conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            }
+            using (var cmd = _conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "UPDATE meta SET version = $v;";
+                cmd.Parameters.AddWithValue("$v", v);
+                cmd.ExecuteNonQuery();
+            }
             tx.Commit();
         }
     }
 
     private int CurrentVersion()
     {
-        var hasMeta = _conn.ExecuteScalar<long>(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta';") > 0;
-        if (!hasMeta) return 0;
-        return _conn.ExecuteScalar<int>("SELECT version FROM meta;");
+        using (var probe = _conn.CreateCommand())
+        {
+            probe.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta';";
+            if ((long)probe.ExecuteScalar()! == 0) return 0;
+        }
+        using var read = _conn.CreateCommand();
+        read.CommandText = "SELECT version FROM meta;";
+        return Convert.ToInt32(read.ExecuteScalar()!);
     }
 
-    public static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    // --- Helpers (allocate a SqliteCommand per call; SQLite is tiny so this is fine) ---
+
+    private static void Exec(SqliteConnection conn, string sql)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private void Exec(string sql, params (string Name, object? Value)[] args)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = sql;
+        foreach (var (n, v) in args) cmd.Parameters.AddWithValue(n, v ?? DBNull.Value);
+        cmd.ExecuteNonQuery();
+    }
+
+    private static string? Str(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
+    private static long? NullableLong(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetInt64(i);
+    private static int? NullableInt(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetInt32(i);
 
     // --- Projects ---
 
-    public IReadOnlyList<Project> GetProjects() =>
-        _conn.Query<Project>("SELECT * FROM projects ORDER BY created_at ASC;").AsList();
+    public IReadOnlyList<Project> GetProjects()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT {ProjectColumns} FROM projects ORDER BY created_at ASC;";
+        var list = new List<Project>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(ReadProject(r));
+        return list;
+    }
 
-    public Project? GetProject(string id) =>
-        _conn.QuerySingleOrDefault<Project>(
-            "SELECT * FROM projects WHERE id = @id;", new { id });
+    public Project? GetProject(string id)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT {ProjectColumns} FROM projects WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? ReadProject(r) : null;
+    }
 
-    public void InsertProject(Project p) =>
-        _conn.Execute("""
-            INSERT INTO projects (id, name, path, default_branch, created_at)
-            VALUES (@Id, @Name, @Path, @DefaultBranch, @CreatedAt);
-            """, p);
+    private static Project ReadProject(SqliteDataReader r) => new(
+        Id: r.GetString(0),
+        Name: r.GetString(1),
+        Path: r.GetString(2),
+        DefaultBranch: r.GetString(3),
+        CreatedAt: r.GetInt64(4));
 
-    public void UpdateProjectName(string id, string name) =>
-        _conn.Execute("UPDATE projects SET name = @name WHERE id = @id;", new { id, name });
+    public void InsertProject(Project p) => Exec(
+        "INSERT INTO projects (id, name, path, default_branch, created_at) " +
+        "VALUES ($id, $name, $path, $defaultBranch, $createdAt);",
+        ("$id", p.Id), ("$name", p.Name), ("$path", p.Path),
+        ("$defaultBranch", p.DefaultBranch), ("$createdAt", p.CreatedAt));
 
-    public void DeleteProject(string id) =>
-        _conn.Execute("DELETE FROM projects WHERE id = @id;", new { id });
+    public void UpdateProjectName(string id, string name) => Exec(
+        "UPDATE projects SET name = $name WHERE id = $id;",
+        ("$id", id), ("$name", name));
+
+    public void DeleteProject(string id) => Exec(
+        "DELETE FROM projects WHERE id = $id;", ("$id", id));
 
     // --- Sessions ---
 
-    public IReadOnlyList<Session> GetSessionsForProject(string projectId) =>
-        _conn.Query<Session>(
-            "SELECT * FROM sessions WHERE project_id = @projectId ORDER BY created_at ASC;",
-            new { projectId }).AsList();
+    public IReadOnlyList<Session> GetSessionsForProject(string projectId)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT {SessionColumns} FROM sessions WHERE project_id = $pid ORDER BY created_at ASC;";
+        cmd.Parameters.AddWithValue("$pid", projectId);
+        var list = new List<Session>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(ReadSession(r));
+        return list;
+    }
 
-    public Session? GetSession(string id) =>
-        _conn.QuerySingleOrDefault<Session>(
-            "SELECT * FROM sessions WHERE id = @id;", new { id });
+    public Session? GetSession(string id)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT {SessionColumns} FROM sessions WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? ReadSession(r) : null;
+    }
 
-    public void InsertSession(Session s) =>
-        _conn.Execute("""
-            INSERT INTO sessions (
-              id, project_id, name, branch_name, worktree_path,
-              base_branch, model, started_utc, status, unread_count,
-              pr_number, pr_state, diff_files, diff_add, diff_del,
-              created_at, last_active_at)
-            VALUES (
-              @Id, @ProjectId, @Name, @BranchName, @WorktreePath,
-              @BaseBranch, @Model, @StartedUtc, @Status, @UnreadCount,
-              @PrNumber, @PrState, @DiffFiles, @DiffAdd, @DiffDel,
-              @CreatedAt, @LastActiveAt);
-            """, s);
+    private static Session ReadSession(SqliteDataReader r) => new()
+    {
+        Id = r.GetString(0),
+        ProjectId = r.GetString(1),
+        Name = r.GetString(2),
+        BranchName = r.GetString(3),
+        WorktreePath = r.GetString(4),
+        CreatedAt = r.GetInt64(5),
+        LastActiveAt = r.GetInt64(6),
+        BaseBranch = r.GetString(7),
+        Model = r.GetString(8),
+        StartedUtc = NullableLong(r, 9),
+        Status = r.GetString(10),
+        UnreadCount = r.GetInt32(11),
+        PrNumber = NullableInt(r, 12),
+        PrState = Str(r, 13),
+        DiffFiles = r.GetInt32(14),
+        DiffAdd = r.GetInt32(15),
+        DiffDel = r.GetInt32(16),
+        ClaudeSessionId = Str(r, 17),
+        PlanJson = Str(r, 18),
+        PermissionMode = r.GetString(19),
+        TotalCostUsd = r.GetDouble(20),
+    };
 
-    public void UpdateSessionStatus(string id, string status) =>
-        _conn.Execute("UPDATE sessions SET status = @status, last_active_at = @ts WHERE id = @id;",
-            new { id, status, ts = Now() });
+    public void InsertSession(Session s) => Exec(
+        """
+        INSERT INTO sessions (
+          id, project_id, name, branch_name, worktree_path,
+          base_branch, model, started_utc, status, unread_count,
+          pr_number, pr_state, diff_files, diff_add, diff_del,
+          created_at, last_active_at,
+          claude_session_id, plan_json, permission_mode, total_cost_usd)
+        VALUES (
+          $id, $projectId, $name, $branchName, $worktreePath,
+          $baseBranch, $model, $startedUtc, $status, $unreadCount,
+          $prNumber, $prState, $diffFiles, $diffAdd, $diffDel,
+          $createdAt, $lastActiveAt,
+          $claudeSessionId, $planJson, $permissionMode, $totalCostUsd);
+        """,
+        ("$id", s.Id), ("$projectId", s.ProjectId), ("$name", s.Name),
+        ("$branchName", s.BranchName), ("$worktreePath", s.WorktreePath),
+        ("$baseBranch", s.BaseBranch), ("$model", s.Model),
+        ("$startedUtc", (object?)s.StartedUtc),
+        ("$status", s.Status), ("$unreadCount", s.UnreadCount),
+        ("$prNumber", (object?)s.PrNumber), ("$prState", (object?)s.PrState),
+        ("$diffFiles", s.DiffFiles), ("$diffAdd", s.DiffAdd), ("$diffDel", s.DiffDel),
+        ("$createdAt", s.CreatedAt), ("$lastActiveAt", s.LastActiveAt),
+        ("$claudeSessionId", (object?)s.ClaudeSessionId),
+        ("$planJson", (object?)s.PlanJson),
+        ("$permissionMode", s.PermissionMode),
+        ("$totalCostUsd", s.TotalCostUsd));
 
-    public void UpdateSessionDiff(string id, int files, int add, int del) =>
-        _conn.Execute("UPDATE sessions SET diff_files = @files, diff_add = @add, diff_del = @del WHERE id = @id;",
-            new { id, files, add, del });
+    public void UpdateSessionStatus(string id, string status) => Exec(
+        "UPDATE sessions SET status = $status, last_active_at = $ts WHERE id = $id;",
+        ("$id", id), ("$status", status), ("$ts", Now()));
 
-    public void UpdateSessionPr(string id, int? prNumber, string? prState) =>
-        _conn.Execute("UPDATE sessions SET pr_number = @prNumber, pr_state = @prState WHERE id = @id;",
-            new { id, prNumber, prState });
+    public void UpdateSessionDiff(string id, int files, int add, int del) => Exec(
+        "UPDATE sessions SET diff_files = $files, diff_add = $add, diff_del = $del WHERE id = $id;",
+        ("$id", id), ("$files", files), ("$add", add), ("$del", del));
 
-    public void UpdateSessionUnread(string id, int unread) =>
-        _conn.Execute("UPDATE sessions SET unread_count = @unread WHERE id = @id;",
-            new { id, unread });
+    public void UpdateSessionPr(string id, int? prNumber, string? prState) => Exec(
+        "UPDATE sessions SET pr_number = $prNumber, pr_state = $prState WHERE id = $id;",
+        ("$id", id), ("$prNumber", (object?)prNumber), ("$prState", (object?)prState));
 
-    public void UpdateClaudeSessionId(string id, string? claudeSessionId) =>
-        _conn.Execute("UPDATE sessions SET claude_session_id = @cid WHERE id = @id;",
-            new { id, cid = claudeSessionId });
+    public void UpdateSessionUnread(string id, int unread) => Exec(
+        "UPDATE sessions SET unread_count = $unread WHERE id = $id;",
+        ("$id", id), ("$unread", unread));
 
-    public void UpdateSessionPlan(string id, string? planJson) =>
-        _conn.Execute("UPDATE sessions SET plan_json = @planJson WHERE id = @id;",
-            new { id, planJson });
+    public void UpdateClaudeSessionId(string id, string? claudeSessionId) => Exec(
+        "UPDATE sessions SET claude_session_id = $cid WHERE id = $id;",
+        ("$id", id), ("$cid", (object?)claudeSessionId));
 
-    public void UpdateSessionPermissionMode(string id, string mode) =>
-        _conn.Execute("UPDATE sessions SET permission_mode = @mode WHERE id = @id;",
-            new { id, mode });
+    public void UpdateSessionPlan(string id, string? planJson) => Exec(
+        "UPDATE sessions SET plan_json = $planJson WHERE id = $id;",
+        ("$id", id), ("$planJson", (object?)planJson));
 
-    public void AddSessionCost(string id, double delta) =>
-        _conn.Execute(
-            "UPDATE sessions SET total_cost_usd = total_cost_usd + @delta WHERE id = @id;",
-            new { id, delta });
+    public void UpdateSessionPermissionMode(string id, string mode) => Exec(
+        "UPDATE sessions SET permission_mode = $mode WHERE id = $id;",
+        ("$id", id), ("$mode", mode));
+
+    public void AddSessionCost(string id, double delta) => Exec(
+        "UPDATE sessions SET total_cost_usd = total_cost_usd + $delta WHERE id = $id;",
+        ("$id", id), ("$delta", delta));
+
+    public void UpdateSessionName(string id, string name) => Exec(
+        "UPDATE sessions SET name = $name WHERE id = $id;",
+        ("$id", id), ("$name", name));
+
+    public void TouchSession(string id) => Exec(
+        "UPDATE sessions SET last_active_at = $ts WHERE id = $id;",
+        ("$id", id), ("$ts", Now()));
+
+    public void DeleteSession(string id) => Exec(
+        "DELETE FROM sessions WHERE id = $id;", ("$id", id));
 
     // --- Messages (transcript) ---
 
-    public IReadOnlyList<MessageRow> GetMessages(string sessionId) =>
-        _conn.Query<MessageRow>(
-            "SELECT * FROM messages WHERE session_id = @sessionId ORDER BY seq ASC;",
-            new { sessionId }).AsList();
+    public IReadOnlyList<MessageRow> GetMessages(string sessionId)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT {MessageColumns} FROM messages WHERE session_id = $sid ORDER BY seq ASC;";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var list = new List<MessageRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(ReadMessage(r));
+        return list;
+    }
+
+    private static MessageRow ReadMessage(SqliteDataReader r) => new()
+    {
+        Id = r.GetString(0),
+        SessionId = r.GetString(1),
+        Role = r.GetString(2),
+        Content = r.GetString(3),
+        ToolsJson = Str(r, 4),
+        CreatedAt = r.GetInt64(5),
+        Seq = r.GetInt32(6),
+    };
 
     public int NextSeq(string sessionId)
     {
-        var max = _conn.ExecuteScalar<long?>(
-            "SELECT MAX(seq) FROM messages WHERE session_id = @sessionId;",
-            new { sessionId });
-        return max is null ? 0 : (int)max.Value + 1;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT MAX(seq) FROM messages WHERE session_id = $sid;";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var raw = cmd.ExecuteScalar();
+        if (raw is null || raw is DBNull) return 0;
+        return Convert.ToInt32(raw) + 1;
     }
 
-    public void InsertMessage(MessageRow m) =>
-        _conn.Execute("""
-            INSERT INTO messages (id, session_id, role, content, tools_json, created_at, seq)
-            VALUES (@Id, @SessionId, @Role, @Content, @ToolsJson, @CreatedAt, @Seq);
-            """, m);
+    public void InsertMessage(MessageRow m) => Exec(
+        "INSERT INTO messages (id, session_id, role, content, tools_json, created_at, seq) " +
+        "VALUES ($id, $sessionId, $role, $content, $toolsJson, $createdAt, $seq);",
+        ("$id", m.Id), ("$sessionId", m.SessionId), ("$role", m.Role),
+        ("$content", m.Content), ("$toolsJson", (object?)m.ToolsJson),
+        ("$createdAt", m.CreatedAt), ("$seq", m.Seq));
 
-    public void UpdateMessage(string id, string content, string? toolsJson) =>
-        _conn.Execute(
-            "UPDATE messages SET content = @content, tools_json = @toolsJson WHERE id = @id;",
-            new { id, content, toolsJson });
-
-    public void UpdateSessionName(string id, string name) =>
-        _conn.Execute("UPDATE sessions SET name = @name WHERE id = @id;", new { id, name });
-
-    public void TouchSession(string id) =>
-        _conn.Execute(
-            "UPDATE sessions SET last_active_at = @ts WHERE id = @id;",
-            new { id, ts = Now() });
-
-    public void DeleteSession(string id) =>
-        _conn.Execute("DELETE FROM sessions WHERE id = @id;", new { id });
+    public void UpdateMessage(string id, string content, string? toolsJson) => Exec(
+        "UPDATE messages SET content = $content, tools_json = $toolsJson WHERE id = $id;",
+        ("$id", id), ("$content", content), ("$toolsJson", (object?)toolsJson));
 
     public void Dispose() => _conn.Dispose();
 }

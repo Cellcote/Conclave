@@ -6,6 +6,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- NativeAOT: real native binary on `dotnet publish`. The flag also turns on
+         the IL trim and AOT-compatibility analyzers in regular dotnet build, so
+         we get warnings about reflection-dependent code paths during dev. -->
+    <PublishAot>true</PublishAot>
+    <!-- Source-gen-only JSON: a stray `JsonSerializer.Deserialize<T>(json)` call
+         (without a JsonSerializerContext) becomes a build error rather than a
+         silent runtime fall-back to reflection. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,7 +25,6 @@
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
     <PackageReference Include="Porta.Pty" Version="1.0.7" />
   </ItemGroup>
