@@ -96,6 +96,7 @@ public sealed class ShellVm : Views.Observable
     public bool IsNewSessionOpen => _newSession is not null;
 
     public void OpenNewSession() => NewSession = new NewSessionVm(Tokens, Projects);
+    public void OpenNewSessionForProject(ProjectVm project) => NewSession = new NewSessionVm(Tokens, Projects) { Project = project };
     public void CancelNewSession() => NewSession = null;
 
     // --- Search ---
