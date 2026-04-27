@@ -39,6 +39,27 @@ public partial class Sidebar : UserControl
         }
     }
 
+    // --- Search ---
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not ShellVm shell) return;
+        if (e.Key == Key.Escape)
+        {
+            shell.ClearSearch();
+            e.Handled = true;
+        }
+    }
+
+    private void OnSearchClearPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is ShellVm shell)
+        {
+            shell.ClearSearch();
+            e.Handled = true;
+        }
+    }
+
     // --- Rename ---
 
     private void OnSessionTitleDoubleTapped(object? sender, TappedEventArgs e)

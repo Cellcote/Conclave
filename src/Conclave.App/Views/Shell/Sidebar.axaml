@@ -4,19 +4,29 @@
              x:Class="Conclave.App.Views.Shell.Sidebar"
              x:DataType="vm:ShellVm">
     <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*">
-        <!-- Search pill -->
+        <!-- Search pill (real input). The TextBox is borderless and lays inside the styled
+             pill Border. ⌘P glyph hides while there's a query so the field doesn't compete. -->
         <Border Grid.Row="0" Margin="10,8,10,10"
                 BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
-                CornerRadius="{Binding Tokens.RadMdCorner}" Padding="10,6">
+                CornerRadius="{Binding Tokens.RadMdCorner}" Padding="10,4">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <TextBlock Text="⌕" Foreground="{Binding Tokens.TextMute}" FontSize="12.5"
                            VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="Search"
-                           Foreground="{Binding Tokens.TextMute}" FontSize="12.5"
-                           VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" x:Name="SearchBox" Margin="8,0,0,0"
+                         Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="Search"
+                         BorderThickness="0" Background="Transparent" Padding="0"
+                         FontSize="12.5" MinHeight="22" VerticalContentAlignment="Center"
+                         KeyDown="OnSearchKeyDown" />
                 <TextBlock Grid.Column="2" Text="⌘P" Foreground="{Binding Tokens.TextMute}"
                            FontSize="10.5" VerticalAlignment="Center"
-                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                           IsVisible="{Binding !HasSearchQuery}" />
+                <TextBlock Grid.Column="2" Text="✕" Foreground="{Binding Tokens.TextDim}"
+                           FontSize="11" VerticalAlignment="Center"
+                           IsVisible="{Binding HasSearchQuery}"
+                           Cursor="Hand"
+                           PointerPressed="OnSearchClearPressed" />
             </Grid>
         </Border>
 

@@ -98,6 +98,24 @@ public sealed class ShellVm : Views.Observable
     public void OpenNewSession() => NewSession = new NewSessionVm(Tokens, Projects);
     public void CancelNewSession() => NewSession = null;
 
+    // --- Search ---
+
+    private string _searchQuery = "";
+    public string SearchQuery
+    {
+        get => _searchQuery;
+        set
+        {
+            if (Set(ref _searchQuery, value))
+            {
+                Notify(nameof(HasSearchQuery));
+                ApplyFilter();
+            }
+        }
+    }
+    public bool HasSearchQuery => !string.IsNullOrEmpty(_searchQuery);
+    public void ClearSearch() => SearchQuery = "";
+
     // --- Composer ---
 
     private string _composerDraft = "";
@@ -202,12 +220,15 @@ public sealed class ShellVm : Views.Observable
     public void ApplyFilter()
     {
         var selected = Filters.FirstOrDefault(f => f.IsSelected);
+        var query = _searchQuery.Trim();
         foreach (var p in Projects)
         {
             bool anyVisible = false;
+            bool projectMatches = string.IsNullOrEmpty(query) ||
+                p.Name.Contains(query, StringComparison.OrdinalIgnoreCase);
             foreach (var s in p.Sessions)
             {
-                bool visible = MatchesFilter(selected, s);
+                bool visible = MatchesFilter(selected, s) && MatchesSearch(s, p, query, projectMatches);
                 s.IsVisibleInTree = visible;
                 if (visible) anyVisible = true;
             }
@@ -224,6 +245,16 @@ public sealed class ShellVm : Views.Observable
             "Idle" => s.Status is SessionStatus.Idle or SessionStatus.Completed,
             _ => true,
         };
+
+    // Matches if any of: project name, session title, branch contains the query (case-insensitive).
+    // Empty query matches everything.
+    private static bool MatchesSearch(SessionVm s, ProjectVm p, string query, bool projectMatches)
+    {
+        if (string.IsNullOrEmpty(query)) return true;
+        if (projectMatches) return true;
+        return s.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || s.Branch.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
 
     private void BuildFilters()
     {
