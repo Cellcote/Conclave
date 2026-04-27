@@ -38,6 +38,12 @@ public sealed class ClaudeService
         Log(session, LogLevel.Inf, $"Turn started (model={session.Model}, branch={session.Branch})");
         _manager.UpdateStatus(session, SessionStatus.Working);
 
+        // Let the dispatcher render the user's bubble + Working status before we spawn the
+        // claude subprocess. Otherwise the UI thread runs straight into Process.Start and
+        // doesn't yield until claude produces its first stdout line — which can be 10–15s on
+        // a cold start, leaving the user staring at an empty composer the whole time.
+        await Task.Yield();
+
         // Track tool_use -> VM so the matching tool_result (delivered as a user event later
         // in the stream) can update the VM's status + meta. Also track owning-message so we
         // can re-persist when the tool result comes back.
