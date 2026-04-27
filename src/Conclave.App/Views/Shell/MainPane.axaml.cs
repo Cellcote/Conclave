@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Conclave.App.ViewModels;
 
 namespace Conclave.App.Views.Shell;
@@ -15,6 +16,39 @@ public partial class MainPane : UserControl
         InitializeComponent();
         _scroll = ScrollHelper.AttachIfReady(
             this.FindControl<ScrollViewer>("TranscriptScroller"));
+
+        var composer = this.FindControl<Border>("ComposerBorder");
+        if (composer is not null)
+        {
+            composer.AddHandler(DragDrop.DragOverEvent, OnComposerDragOver);
+            composer.AddHandler(DragDrop.DropEvent, OnComposerDrop);
+        }
+    }
+
+    private void OnComposerDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = e.DataTransfer.Contains(DataFormat.File) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnComposerDrop(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not ShellVm shell) return;
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null) return;
+        foreach (var item in files)
+        {
+            var path = item.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                shell.AddAttachment(path);
+        }
+        e.Handled = true;
+    }
+
+    private void OnRemoveAttachment(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellVm shell) return;
+        if (sender is Button { DataContext: AttachmentVm vm }) shell.RemoveAttachment(vm);
     }
 
     private void OnSegTerminal(object? s, PointerPressedEventArgs e) => Switch(MainView.Terminal);
