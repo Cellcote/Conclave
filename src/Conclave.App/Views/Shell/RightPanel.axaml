@@ -95,7 +95,8 @@
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
                                    VerticalAlignment="Center" />
                         <ComboBox Grid.Row="8" Grid.Column="1" x:Name="PermissionPicker"
-                                  SelectedItem="{Binding ActiveSession.PermissionMode, Mode=OneWay}"
+                                  SelectedValue="{Binding ActiveSession.PermissionMode, Mode=OneWay}"
+                                  SelectedValueBinding="{ReflectionBinding Content}"
                                   SelectionChanged="OnPermissionModeChanged"
                                   HorizontalAlignment="Stretch" MinWidth="0"
                                   FontSize="12" Padding="8,2"
