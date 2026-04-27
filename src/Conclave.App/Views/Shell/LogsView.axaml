@@ -20,7 +20,7 @@
 
         <ScrollViewer x:Name="LogsScroller" Padding="14,10,14,14"
                       HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl ItemsSource="{Binding ActiveSession.Logs}">
+            <ItemsControl x:Name="LogsList" ItemsSource="{Binding ActiveSession.Logs}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate><StackPanel Spacing="1" /></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>

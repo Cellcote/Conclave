@@ -369,13 +369,39 @@ public sealed class ClaudeService
     private static string MetaFromResult(string kind, string result)
     {
         if (string.IsNullOrWhiteSpace(result)) return "";
-        // Very simple heuristics — the follow-up pass will parse tool-specific results properly.
-        if (kind == "READ")
+
+        switch (kind)
         {
-            var lineCount = result.Count(c => c == '\n');
-            if (lineCount > 0) return $"{lineCount} lines";
+            case "READ":
+                // Read results are line-numbered ("   1\tline"). Newline count == line count.
+                var readLines = result.Count(c => c == '\n');
+                return readLines > 0 ? $"{readLines} lines" : "";
+
+            case "GLOB":
+            case "GREP":
+                // One match per non-blank line.
+                var matchCount = result.Split('\n').Count(l => !string.IsNullOrWhiteSpace(l));
+                if (matchCount == 0) return "no matches";
+                return matchCount == 1 ? "1 match" : $"{matchCount} matches";
+
+            case "WRITE":
+            case "EDIT":
+                // Claude wraps successful file ops in a verbose preamble; collapse to "ok".
+                if (result.Contains("has been updated", StringComparison.Ordinal)
+                    || result.Contains("was created", StringComparison.Ordinal)
+                    || result.Contains("file created", StringComparison.OrdinalIgnoreCase))
+                    return "ok";
+                return TruncateFirstLine(result);
+
+            case "BASH":
+            default:
+                return TruncateFirstLine(result);
         }
-        var first = result.Split('\n').FirstOrDefault()?.Trim() ?? "";
+    }
+
+    private static string TruncateFirstLine(string result)
+    {
+        var first = result.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l))?.Trim() ?? "";
         return first.Length > 40 ? first[..40] + "…" : first;
     }
 

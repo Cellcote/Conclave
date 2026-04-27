@@ -98,9 +98,10 @@
         </Border>
 
         <!-- Transcript -->
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" Padding="34,8,34,14"
+        <ScrollViewer Grid.Row="1" x:Name="TranscriptScroller"
+                      HorizontalScrollBarVisibility="Disabled" Padding="34,8,34,14"
                       IsVisible="{Binding IsTerminalView}">
-            <ItemsControl ItemsSource="{Binding ActiveSession.Transcript}">
+            <ItemsControl x:Name="TranscriptList" ItemsSource="{Binding ActiveSession.Transcript}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TranscriptMessageVm">
                         <StackPanel>
