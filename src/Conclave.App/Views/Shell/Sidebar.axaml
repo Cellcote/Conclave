@@ -70,7 +70,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ProjectVm">
                             <StackPanel Margin="0,6,0,0" IsVisible="{Binding IsVisibleInTree}">
-                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,6">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="10,6">
                                     <Grid.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Rename" Click="OnRenameProjectMenu" />
@@ -94,6 +94,13 @@
                                                FontSize="10.5" Foreground="{Binding Tokens.TextMute}"
                                                VerticalAlignment="Center"
                                                FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+                                    <Border Grid.Column="3" Margin="6,0,0,0" Padding="2,0"
+                                            Cursor="Hand" ToolTip.Tip="New session in project"
+                                            PointerPressed="OnNewSessionForProject">
+                                        <TextBlock Text="+" FontSize="13"
+                                                   Foreground="{Binding Tokens.TextDim}"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
                                 </Grid>
                                 <ItemsControl ItemsSource="{Binding Sessions}">
                                     <ItemsControl.ItemTemplate>

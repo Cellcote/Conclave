@@ -127,6 +127,15 @@ public partial class Sidebar : UserControl
             p.IsEditing = true;
     }
 
+    private void OnNewSessionForProject(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control c && c.DataContext is ProjectVm p && DataContext is ShellVm shell)
+        {
+            shell.OpenNewSessionForProject(p);
+            e.Handled = true;
+        }
+    }
+
     // --- Project rename ---
 
     private void OnProjectNameDoubleTapped(object? sender, TappedEventArgs e)
