@@ -37,4 +37,6 @@ launchSettings.json
 
 # Avalonia AOT / publish output
 publish/
-*.app/
+# Anchored to repo root so it only ignores macOS bundle output, not the
+# project directory `Conclave.App/` which contains the source.
+/*.app/
