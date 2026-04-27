@@ -54,6 +54,7 @@
                                        Foreground="{Binding Tokens.Text}" />
                         </Border>
                         <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                Background="Transparent"
                                 BorderThickness="1" BorderBrush="Transparent"
                                 PointerPressed="OnSegTerminal"
                                 IsVisible="{Binding !IsTerminalView}">
@@ -70,6 +71,7 @@
                                        Foreground="{Binding Tokens.Text}" />
                         </Border>
                         <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                Background="Transparent"
                                 BorderThickness="1" BorderBrush="Transparent"
                                 PointerPressed="OnSegPlan"
                                 IsVisible="{Binding !IsPlanView}">
@@ -86,6 +88,7 @@
                                        Foreground="{Binding Tokens.Text}" />
                         </Border>
                         <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                Background="Transparent"
                                 BorderThickness="1" BorderBrush="Transparent"
                                 PointerPressed="OnSegLogs"
                                 IsVisible="{Binding !IsLogsView}">
