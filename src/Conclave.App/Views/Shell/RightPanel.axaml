@@ -10,108 +10,94 @@
                       HorizontalScrollBarVisibility="Disabled"
                       IsVisible="{Binding HasActiveSession}">
             <StackPanel Spacing="26">
-                <!-- Session section — one DockPanel per row so the value gets a real
-                     arrange width, which is what TextTrimming needs to kick in. -->
-                <StackPanel Spacing="9">
+                <!-- Session section — left-aligned key/value table. Auto column for
+                     labels, * column for values. Values wrap (the * column gives the
+                     value TextBlock a hard arrange width) so long mono paths break
+                     across lines instead of overflowing the panel. -->
+                <StackPanel>
                     <TextBlock Text="SESSION" FontSize="11" FontWeight="SemiBold"
-                               Foreground="{Binding Tokens.TextDim}" Margin="0,0,0,4"
+                               Foreground="{Binding Tokens.TextDim}" Margin="0,0,0,12"
                                LetterSpacing="1.5" />
+                    <Grid ColumnDefinitions="Auto,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          ColumnSpacing="14" RowSpacing="9">
 
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Status"
-                                   FontSize="12" Foreground="{Binding Tokens.TextDim}" />
-                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Status"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top" />
+                        <StackPanel Grid.Row="0" Grid.Column="1"
+                                    Orientation="Horizontal" Spacing="6">
                             <Border Width="6" Height="6" CornerRadius="3"
                                     Background="{Binding ActiveSession.StatusColor}"
                                     VerticalAlignment="Center" />
                             <TextBlock Text="{Binding ActiveSession.StatusLabel}" FontSize="12"
                                        Foreground="{Binding Tokens.Text}" />
                         </StackPanel>
-                    </DockPanel>
 
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Branch"
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Branch"
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.Branch}" FontSize="12"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveSession.Branch}"
+                                   FontSize="12"
                                    FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
+                                   Foreground="{Binding Tokens.Text}" TextWrapping="Wrap" />
 
-                    <!-- Worktree paths can be very long; wrap on character boundaries
-                         (mono with no spaces) instead of ellipsizing so the user can
-                         see the whole path. Aligned right to match the rest of the column. -->
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Worktree"
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Worktree"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActiveSession.Worktree}"
+                                   FontSize="12"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   Foreground="{Binding Tokens.Text}" TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Base"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ActiveSession.BaseBranch}"
+                                   FontSize="12"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   Foreground="{Binding Tokens.Text}" TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Model"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ActiveSession.Model}"
+                                   FontSize="12" Foreground="{Binding Tokens.Text}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Started"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding ActiveSession.StartedFormatted}"
+                                   FontSize="12"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   Foreground="{Binding Tokens.Text}" />
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="PID"
+                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ActiveSession.PidFormatted}"
+                                   FontSize="12"
+                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                   Foreground="{Binding Tokens.Text}" />
+
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Cost"
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
                                    VerticalAlignment="Top"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.Worktree}" FontSize="12"
+                                   IsVisible="{Binding ActiveSession.HasCost}" />
+                        <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ActiveSession.TotalCostFormatted}"
+                                   FontSize="12"
                                    FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
                                    Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextWrapping="WrapWithOverflow" />
-                    </DockPanel>
+                                   IsVisible="{Binding ActiveSession.HasCost}" />
 
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Base"
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Permissions"
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.BaseBranch}" FontSize="12"
-                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Model"
-                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.Model}" FontSize="12"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Started"
-                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.StartedFormatted}" FontSize="12"
-                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="PID"
-                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.PidFormatted}" FontSize="12"
-                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-
-                    <DockPanel LastChildFill="True"
-                               IsVisible="{Binding ActiveSession.HasCost}">
-                        <TextBlock DockPanel.Dock="Left" Text="Cost"
-                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ActiveSession.TotalCostFormatted}" FontSize="12"
-                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                   Foreground="{Binding Tokens.Text}"
-                                   TextAlignment="Right" />
-                    </DockPanel>
-
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Permissions"
-                                   FontSize="12" Foreground="{Binding Tokens.TextDim}"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,12,0" />
-                        <ComboBox x:Name="PermissionPicker"
+                                   VerticalAlignment="Center" />
+                        <ComboBox Grid.Row="8" Grid.Column="1" x:Name="PermissionPicker"
                                   SelectedItem="{Binding ActiveSession.PermissionMode, Mode=OneWay}"
                                   SelectionChanged="OnPermissionModeChanged"
-                                  HorizontalAlignment="Right" MinWidth="0"
+                                  HorizontalAlignment="Stretch" MinWidth="0"
                                   FontSize="12" Padding="8,2"
                                   Background="Transparent"
                                   BorderBrush="{Binding Tokens.Border}" BorderThickness="1">
@@ -119,7 +105,7 @@
                             <ComboBoxItem Content="acceptEdits" />
                             <ComboBoxItem Content="bypassPermissions" />
                         </ComboBox>
-                    </DockPanel>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Pull request section -->
@@ -147,13 +133,13 @@
                                 <TextBlock Text="{Binding ActiveSession.Pr.Branch}" FontSize="11.5"
                                            FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
                                            Foreground="{Binding Tokens.Text}"
-                                           TextTrimming="CharacterEllipsis" />
+                                           TextWrapping="Wrap" />
                                 <TextBlock Grid.Column="1" Text="→" FontSize="11.5"
                                            Foreground="{Binding Tokens.TextMute}" />
                                 <TextBlock Grid.Column="2" Text="{Binding ActiveSession.Pr.Base}" FontSize="11.5"
                                            FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
                                            Foreground="{Binding Tokens.Text}"
-                                           TextTrimming="CharacterEllipsis" />
+                                           TextWrapping="Wrap" />
                             </Grid>
                             <TextBlock Text="{Binding ActiveSession.Pr.MetaTail}" FontSize="11"
                                        Foreground="{Binding Tokens.TextDim}"
@@ -178,23 +164,26 @@
                                    Foreground="{Binding Tokens.Err}"
                                    FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
                     </StackPanel>
+                    <!-- File-change rows: same Auto/* table pattern as the SESSION block.
+                         Path wraps to break long file paths inside the column. -->
                     <ItemsControl ItemsSource="{Binding ActiveSession.Diff.Changes}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:FileChangeVm">
-                                <DockPanel LastChildFill="True" Margin="0,0,0,4">
-                                    <TextBlock DockPanel.Dock="Left" Text="{Binding KindLetter}"
-                                               FontSize="11.5" Width="14"
+                                <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="6"
+                                      Margin="0,0,0,4">
+                                    <TextBlock Text="{Binding KindLetter}"
+                                               FontSize="11.5"
                                                FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                               Foreground="#7BB87B" VerticalAlignment="Center" />
-                                    <TextBlock DockPanel.Dock="Right" Text="{Binding AddDel}"
-                                               FontSize="11.5" Margin="8,0,0,0"
+                                               Foreground="#7BB87B" VerticalAlignment="Top" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Path}"
+                                               FontSize="11.5"
                                                FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                               VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Path}" FontSize="11.5"
+                                               TextWrapping="Wrap" VerticalAlignment="Top" />
+                                    <TextBlock Grid.Column="2" Text="{Binding AddDel}"
+                                               FontSize="11.5"
                                                FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                               TextTrimming="CharacterEllipsis"
-                                               VerticalAlignment="Center" />
-                                </DockPanel>
+                                               VerticalAlignment="Top" />
+                                </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
