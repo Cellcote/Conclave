@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Conclave.App.Claude;
 using Conclave.App.Design;
@@ -8,7 +9,21 @@ namespace Conclave.App;
 
 public partial class MainWindow : Window
 {
+    // Below this window width, the right panel + its splitter auto-collapse so the main
+    // pane keeps a usable amount of room. Above the threshold we restore whatever width
+    // the user had before the auto-collapse (so manual resizes survive a window narrowing).
+    private const double RightCollapseThreshold = 1080;
+
     private SessionManager? _manager;
+    private ShellVm? _shell;
+
+    private double _savedRightPanelWidth = 320;
+
+    // ColumnDefinition isn't a Control, so x:Name doesn't generate a strongly-typed
+    // field. Indexed lookup against the named ShellGrid is the cleanest way to reach
+    // the splitter + right-panel columns.
+    private ColumnDefinition RightSplit => ShellGrid.ColumnDefinitions[3];
+    private ColumnDefinition RightCol => ShellGrid.ColumnDefinitions[4];
 
     public MainWindow()
     {
@@ -18,10 +33,48 @@ public partial class MainWindow : Window
 
         var claudeService = new ClaudeService(_manager);
         var capabilities = ClaudeCapabilities.Detect();
-        var shell = new ShellVm(tokens, _manager, capabilities);
-        shell.SendRequested += (session, prompt) => claudeService.RunTurnAsync(session, prompt);
-        DataContext = shell;
+        _shell = new ShellVm(tokens, _manager, capabilities);
+        _shell.SendRequested += (session, prompt) => claudeService.RunTurnAsync(session, prompt);
+        _shell.PropertyChanged += OnShellPropertyChanged;
+        DataContext = _shell;
 
+        SizeChanged += (_, e) => ApplyResponsiveLayout(e.NewSize.Width, _shell?.HasActiveSession ?? false);
         Closing += (_, _) => _manager?.Dispose();
     }
+
+    protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+        ApplyResponsiveLayout(Bounds.Width, _shell?.HasActiveSession ?? false);
+    }
+
+    private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // When the active session is cleared (empty state), collapse the right column.
+        // When it's restored, restore the right column to its remembered width.
+        if (e.PropertyName == nameof(ShellVm.HasActiveSession))
+            ApplyResponsiveLayout(Bounds.Width, _shell?.HasActiveSession ?? false);
+    }
+
+    private void ApplyResponsiveLayout(double windowWidth, bool hasActiveSession)
+    {
+        bool shouldCollapseRight = !hasActiveSession || windowWidth < RightCollapseThreshold;
+
+        if (shouldCollapseRight && !RightColIsZero())
+        {
+            // Remember whatever the user had set so we can restore it on widen.
+            _savedRightPanelWidth = RightCol.Width.Value > 0
+                ? RightCol.Width.Value
+                : _savedRightPanelWidth;
+            RightCol.Width = new GridLength(0);
+            RightSplit.Width = new GridLength(0);
+        }
+        else if (!shouldCollapseRight && RightColIsZero())
+        {
+            RightCol.Width = new GridLength(_savedRightPanelWidth);
+            RightSplit.Width = new GridLength(4);
+        }
+    }
+
+    private bool RightColIsZero() => RightCol.Width.Value == 0;
 }

@@ -5,15 +5,59 @@
         x:Class="Conclave.App.MainWindow"
         x:DataType="vm:ShellVm"
         Title="Conclave"
-        Width="1320" Height="820"
+        Width="1320" Height="820" MinWidth="640" MinHeight="480"
         Background="{Binding Tokens.Bg}">
     <Panel>
-        <Grid ColumnDefinitions="264,*,320" RowDefinitions="38,*">
-            <shell:TitleBar Grid.Row="0" Grid.ColumnSpan="3" />
+        <!-- Five-column layout: sidebar · splitter · main · splitter · right.
+             Sidebar and right widths are pixel-sized and user-resizable via the
+             GridSplitters. Min/max widths keep the columns from collapsing past
+             usable sizes. The right pair (splitter + panel) auto-collapses below
+             a threshold window width — see MainWindow.axaml.cs. -->
+        <Grid x:Name="ShellGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="264" MinWidth="200" MaxWidth="380" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" MinWidth="320" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="320" MinWidth="240" MaxWidth="480" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <shell:TitleBar Grid.Row="0" Grid.ColumnSpan="5" />
+
             <shell:Sidebar Grid.Row="1" Grid.Column="0" />
-            <shell:MainPane Grid.Row="1" Grid.Column="1" IsVisible="{Binding HasActiveSession}" />
-            <shell:EmptyState Grid.Row="1" Grid.Column="1" IsVisible="{Binding !HasActiveSession}" />
-            <shell:RightPanel Grid.Row="1" Grid.Column="2"
+
+            <!-- Left splitter: invisible drag area on top of a 1px divider line. -->
+            <Border Grid.Row="1" Grid.Column="1"
+                    Background="{Binding Tokens.Border}"
+                    Width="1" HorizontalAlignment="Center"
+                    IsHitTestVisible="False" />
+            <GridSplitter Grid.Row="1" Grid.Column="1"
+                          Background="Transparent"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext" />
+
+            <shell:MainPane Grid.Row="1" Grid.Column="2"
+                            IsVisible="{Binding HasActiveSession}" />
+            <shell:EmptyState Grid.Row="1" Grid.Column="2"
+                              IsVisible="{Binding !HasActiveSession}" />
+
+            <!-- Right splitter: same pattern; hidden when there's no active session. -->
+            <Border Grid.Row="1" Grid.Column="3"
+                    Background="{Binding Tokens.Border}"
+                    Width="1" HorizontalAlignment="Center"
+                    IsHitTestVisible="False"
+                    IsVisible="{Binding HasActiveSession}" />
+            <GridSplitter Grid.Row="1" Grid.Column="3"
+                          Background="Transparent"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          IsVisible="{Binding HasActiveSession}" />
+
+            <shell:RightPanel Grid.Row="1" Grid.Column="4"
                               IsVisible="{Binding HasActiveSession}" />
         </Grid>
         <shell:NewSessionModal />
