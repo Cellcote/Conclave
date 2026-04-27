@@ -174,7 +174,7 @@ public sealed class ShellVm : Views.Observable
     {
         if (string.IsNullOrEmpty(path)) return;
         foreach (var existing in ComposerAttachments)
-            if (string.Equals(existing.Path, path, StringComparison.Ordinal)) return;
+            if (string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase)) return;
         ComposerAttachments.Add(new AttachmentVm(Tokens, path));
     }
 
@@ -193,7 +193,9 @@ public sealed class ShellVm : Views.Observable
         // model sees them as context before the prompt.
         if (ComposerAttachments.Count > 0)
         {
-            var refs = string.Join(' ', ComposerAttachments.Select(a => "@" + a.Path));
+            // Newline-separated: paths may contain spaces, which would otherwise terminate
+            // the @-mention at the wrong boundary.
+            var refs = string.Join('\n', ComposerAttachments.Select(a => "@" + a.Path));
             draft = draft.Length == 0 ? refs : refs + "\n\n" + draft;
             ComposerAttachments.Clear();
         }

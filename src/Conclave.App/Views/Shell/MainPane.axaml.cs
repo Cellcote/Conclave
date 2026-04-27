@@ -39,7 +39,8 @@ public partial class MainPane : UserControl
         foreach (var item in files)
         {
             var path = item.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(path)) shell.AddAttachment(path);
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                shell.AddAttachment(path);
         }
         e.Handled = true;
     }
