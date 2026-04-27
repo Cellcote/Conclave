@@ -32,6 +32,19 @@
                        VerticalAlignment="Center" MaxWidth="420" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding HasActiveSession}" />
 
+            <!-- claude version (only when detected). Sits in the spacer column and hugs
+                 the right edge so it lives just before the ⌘K pill. -->
+            <Border Grid.Column="6" Padding="6,2" CornerRadius="{Binding Tokens.RadXsCorner}"
+                    Background="{Binding Tokens.Panel}"
+                    VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"
+                    IsVisible="{Binding Claude.Available}"
+                    ToolTip.Tip="Detected `claude` CLI version">
+                <TextBlock Text="{Binding Claude.Version, StringFormat='claude {0}'}"
+                           FontSize="10.5" FontWeight="Medium"
+                           Foreground="{Binding Tokens.TextMute}"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
+            </Border>
+
             <!-- ⌘K pill -->
             <Border Grid.Column="7" Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
                     BorderBrush="{Binding Tokens.Border}" BorderThickness="1"

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using Conclave.App.Claude;
 using Conclave.App.Design;
 using Conclave.App.Sessions;
 
@@ -11,6 +12,7 @@ public sealed class ShellVm : Views.Observable
 {
     public Tokens Tokens { get; }
     public SessionManager Manager { get; }
+    public ClaudeCapabilities Claude { get; }
 
     public ObservableCollection<ProjectVm> Projects => Manager.Projects;
     public ObservableCollection<FilterVm> Filters { get; } = new();
@@ -131,10 +133,11 @@ public sealed class ShellVm : Views.Observable
         catch (ObjectDisposedException) { /* race: already completed */ }
     }
 
-    public ShellVm(Tokens tokens, SessionManager manager)
+    public ShellVm(Tokens tokens, SessionManager manager, ClaudeCapabilities claude)
     {
         Tokens = tokens;
         Manager = manager;
+        Claude = claude;
         BuildFilters();
         RecalcFilterCounts();
 

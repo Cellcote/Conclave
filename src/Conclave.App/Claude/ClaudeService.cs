@@ -322,6 +322,11 @@ public sealed class ClaudeService
         "WebFetch" => "FETCH",
         "TodoWrite" => "TODO",
         "Task" => "TASK",
+        // Special interactive tools that the SDK would normally surface via canUseTool.
+        // We render them with distinct kinds so the user can spot them in the transcript.
+        "AskUserQuestion" => "ASK",
+        "ExitPlanMode" => "PLAN",
+        "EnterPlanMode" => "PLAN",
         _ => toolName.ToUpperInvariant(),
     };
 
@@ -341,10 +346,37 @@ public sealed class ClaudeService
                 "WebFetch" => StringProp(root, "url"),
                 "TodoWrite" => "todo list updated",
                 "Task" => StringProp(root, "description"),
+                "AskUserQuestion" => FirstQuestionText(root),
+                "EnterPlanMode" or "ExitPlanMode" => FirstLineOfPlan(root),
                 _ => "",
             };
         }
         catch (JsonException) { return ""; }
+    }
+
+    // AskUserQuestion input: { questions: [{ question, options: [...] }] }. We surface the
+    // first question's text so the user can see what claude is asking without expanding.
+    private static string FirstQuestionText(JsonElement root)
+    {
+        if (!root.TryGetProperty("questions", out var qs)) return "user input requested";
+        if (qs.ValueKind != JsonValueKind.Array || qs.GetArrayLength() == 0) return "user input requested";
+        var first = qs[0];
+        return first.ValueKind == JsonValueKind.Object && first.TryGetProperty("question", out var q)
+            && q.ValueKind == JsonValueKind.String
+            ? q.GetString() ?? "user input requested"
+            : "user input requested";
+    }
+
+    // EnterPlanMode/ExitPlanMode input has a "plan" string (markdown). Show the first
+    // non-empty line so it's a hint, not the whole plan.
+    private static string FirstLineOfPlan(JsonElement root)
+    {
+        if (!root.TryGetProperty("plan", out var p) || p.ValueKind != JsonValueKind.String) return "";
+        var text = p.GetString() ?? "";
+        var firstLine = text.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l))?.Trim() ?? "";
+        // Strip leading markdown markers (`#`, `-`, `*`) so the kernel of the line shows.
+        firstLine = firstLine.TrimStart('#', '-', '*', ' ');
+        return firstLine;
     }
 
     // If the file path is inside the session's worktree, strip the prefix so the transcript

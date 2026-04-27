@@ -17,7 +17,8 @@ public partial class MainWindow : Window
         _manager = SessionManager.Open(tokens);
 
         var claudeService = new ClaudeService(_manager);
-        var shell = new ShellVm(tokens, _manager);
+        var capabilities = ClaudeCapabilities.Detect();
+        var shell = new ShellVm(tokens, _manager, capabilities);
         shell.SendRequested += (session, prompt) => claudeService.RunTurnAsync(session, prompt);
         DataContext = shell;
 
