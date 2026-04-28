@@ -367,6 +367,21 @@ public sealed class SessionManager : IDisposable
     {
         _db.UpdateSessionStatus(s.Id, status.ToString());
         s.Status = status;
+        // Only "claude is done" transitions bump the session — intermediate Working /
+        // RunningTool flips during a turn must not reorder the sidebar.
+        if (status is SessionStatus.Idle or SessionStatus.Error)
+        {
+            _db.TouchSession(s.Id);
+            BumpToTop(s);
+        }
+    }
+
+    private void BumpToTop(SessionVm s)
+    {
+        var project = FindProjectOf(s);
+        if (project is null) return;
+        var idx = project.Sessions.IndexOf(s);
+        if (idx > 0) project.Sessions.Move(idx, 0);
     }
 
     private static string RelativeTime(long unixMs)
@@ -461,7 +476,7 @@ public sealed class SessionManager : IDisposable
         _db.InsertSession(s);
 
         var vm = BuildSessionVm(s);
-        project.Sessions.Add(vm);
+        project.Sessions.Insert(0, vm);
         return vm;
     }
 
