@@ -60,6 +60,16 @@ public sealed class SessionManager : IDisposable
 
     private SessionVm BuildSessionVm(Session s)
     {
+        // A session persisted as Working/RunningTool means the app was killed mid-turn — the
+        // claude process is gone and there's no CancellationSource to cancel, so leaving it
+        // busy would wedge the composer with a Stop button that does nothing. Reset to Idle.
+        var loadedStatus = Enum.TryParse<SessionStatus>(s.Status, out var st) ? st : SessionStatus.Idle;
+        if (loadedStatus is SessionStatus.Working or SessionStatus.RunningTool)
+        {
+            loadedStatus = SessionStatus.Idle;
+            _db.UpdateSessionStatus(s.Id, loadedStatus.ToString());
+        }
+
         var vm = new SessionVm(_tokens)
         {
             Id = s.Id,
@@ -71,7 +81,7 @@ public sealed class SessionManager : IDisposable
                 ? DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime
                 : DateTime.UtcNow,
             LastActivity = RelativeTime(s.LastActiveAt),
-            Status = Enum.TryParse<SessionStatus>(s.Status, out var st) ? st : SessionStatus.Idle,
+            Status = loadedStatus,
             Unread = s.UnreadCount,
             Diff = BuildDiff(s),
         };
