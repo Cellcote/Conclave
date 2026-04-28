@@ -209,9 +209,9 @@
         <Border Grid.Row="2" x:Name="ComposerBorder" Margin="28,6,28,24"
                 BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
                 CornerRadius="{Binding Tokens.RadMdCorner}" Background="{Binding Tokens.Panel}"
-                Padding="18,16,14,14"
+                Padding="14,12"
                 DragDrop.AllowDrop="True">
-            <StackPanel Spacing="14">
+            <StackPanel Spacing="8">
                 <TextBox x:Name="ComposerBox"
                          Text="{Binding ComposerDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          PlaceholderText="Continue the session…"
@@ -219,9 +219,19 @@
                          BorderThickness="0"
                          Background="Transparent"
                          AcceptsReturn="True" TextWrapping="Wrap"
-                         MinHeight="36" MaxHeight="220"
+                         MinHeight="28" MaxHeight="220"
                          Padding="0"
-                         IsEnabled="{Binding HasActiveSession}" />
+                         IsEnabled="{Binding HasActiveSession}">
+                    <!-- FluentTheme draws a thick accent border on focus regardless
+                         of BorderThickness="0". Override the focus-state resources
+                         so the outer composer Border is the sole focus indicator. -->
+                    <TextBox.Resources>
+                        <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    </TextBox.Resources>
+                </TextBox>
 
                 <ItemsControl ItemsSource="{Binding ComposerAttachments}"
                               IsVisible="{Binding HasComposerAttachments}">
