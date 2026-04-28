@@ -69,6 +69,15 @@ public sealed class Database : IDisposable
         (6, """
             ALTER TABLE sessions ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0;
             """),
+        (7, """
+            ALTER TABLE sessions ADD COLUMN pr_merged_at INTEGER;
+            """),
+        (8, """
+            CREATE TABLE settings (
+              key   TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            );
+            """),
     };
 
     // Explicit column lists so ordinal mapping in Read*() stays stable.
@@ -77,7 +86,7 @@ public sealed class Database : IDisposable
         "id, project_id, name, branch_name, worktree_path, created_at, last_active_at, " +
         "base_branch, model, started_utc, status, unread_count, " +
         "pr_number, pr_state, diff_files, diff_add, diff_del, " +
-        "claude_session_id, plan_json, permission_mode, total_cost_usd";
+        "claude_session_id, plan_json, permission_mode, total_cost_usd, pr_merged_at";
     private const string MessageColumns =
         "id, session_id, role, content, tools_json, created_at, seq";
 
@@ -261,6 +270,7 @@ public sealed class Database : IDisposable
         PlanJson = Str(r, 18),
         PermissionMode = r.GetString(19),
         TotalCostUsd = r.GetDouble(20),
+        PrMergedAt = NullableLong(r, 21),
     };
 
     public void InsertSession(Session s) => Exec(
@@ -268,13 +278,13 @@ public sealed class Database : IDisposable
         INSERT INTO sessions (
           id, project_id, name, branch_name, worktree_path,
           base_branch, model, started_utc, status, unread_count,
-          pr_number, pr_state, diff_files, diff_add, diff_del,
+          pr_number, pr_state, pr_merged_at, diff_files, diff_add, diff_del,
           created_at, last_active_at,
           claude_session_id, plan_json, permission_mode, total_cost_usd)
         VALUES (
           $id, $projectId, $name, $branchName, $worktreePath,
           $baseBranch, $model, $startedUtc, $status, $unreadCount,
-          $prNumber, $prState, $diffFiles, $diffAdd, $diffDel,
+          $prNumber, $prState, $prMergedAt, $diffFiles, $diffAdd, $diffDel,
           $createdAt, $lastActiveAt,
           $claudeSessionId, $planJson, $permissionMode, $totalCostUsd);
         """,
@@ -284,6 +294,7 @@ public sealed class Database : IDisposable
         ("$startedUtc", (object?)s.StartedUtc),
         ("$status", s.Status), ("$unreadCount", s.UnreadCount),
         ("$prNumber", (object?)s.PrNumber), ("$prState", (object?)s.PrState),
+        ("$prMergedAt", (object?)s.PrMergedAt),
         ("$diffFiles", s.DiffFiles), ("$diffAdd", s.DiffAdd), ("$diffDel", s.DiffDel),
         ("$createdAt", s.CreatedAt), ("$lastActiveAt", s.LastActiveAt),
         ("$claudeSessionId", (object?)s.ClaudeSessionId),
@@ -301,9 +312,10 @@ public sealed class Database : IDisposable
         "UPDATE sessions SET diff_files = $files, diff_add = $add, diff_del = $del WHERE id = $id;",
         ("$id", id), ("$files", files), ("$add", add), ("$del", del));
 
-    public void UpdateSessionPr(string id, int? prNumber, string? prState) => Exec(
-        "UPDATE sessions SET pr_number = $prNumber, pr_state = $prState WHERE id = $id;",
-        ("$id", id), ("$prNumber", (object?)prNumber), ("$prState", (object?)prState));
+    public void UpdateSessionPr(string id, int? prNumber, string? prState, long? prMergedAt) => Exec(
+        "UPDATE sessions SET pr_number = $prNumber, pr_state = $prState, pr_merged_at = $prMergedAt WHERE id = $id;",
+        ("$id", id), ("$prNumber", (object?)prNumber), ("$prState", (object?)prState),
+        ("$prMergedAt", (object?)prMergedAt));
 
     public void UpdateSessionUnread(string id, int unread) => Exec(
         "UPDATE sessions SET unread_count = $unread WHERE id = $id;",
@@ -380,6 +392,22 @@ public sealed class Database : IDisposable
     public void UpdateMessage(string id, string content, string? toolsJson) => Exec(
         "UPDATE messages SET content = $content, tools_json = $toolsJson WHERE id = $id;",
         ("$id", id), ("$content", content), ("$toolsJson", (object?)toolsJson));
+
+    // --- Settings (key/value) ---
+
+    public string? GetSetting(string key)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT value FROM settings WHERE key = $key;";
+        cmd.Parameters.AddWithValue("$key", key);
+        var raw = cmd.ExecuteScalar();
+        return raw is null || raw is DBNull ? null : (string)raw;
+    }
+
+    public void SetSetting(string key, string value) => Exec(
+        "INSERT INTO settings (key, value) VALUES ($key, $value) " +
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+        ("$key", key), ("$value", value));
 
     public void Dispose() => _conn.Dispose();
 }

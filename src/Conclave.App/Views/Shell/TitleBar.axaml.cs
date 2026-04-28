@@ -35,5 +35,10 @@ public partial class TitleBar : UserControl
         e.Handled = true;
     }
 
+    private void OnPreferences(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is ShellVm shell) shell.OpenPreferences();
+    }
+
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 }

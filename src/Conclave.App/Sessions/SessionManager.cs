@@ -15,6 +15,10 @@ public sealed class SessionManager : IDisposable
 
     public ObservableCollection<ProjectVm> Projects { get; } = new();
 
+    // Exposed so subsystems wired alongside SessionManager (settings UI, AutoCleanupService)
+    // can read/write directly without re-routing every helper through this class.
+    public Database Db => _db;
+
     public SessionManager(Database db, string worktreeRoot, Tokens tokens)
     {
         _db = db;
@@ -123,20 +127,7 @@ public sealed class SessionManager : IDisposable
         try
         {
             var info = GhService.TryGetPullRequest(vm.Worktree);
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                if (info is not { } pr) { vm.Pr = null; _db.UpdateSessionPr(vm.Id, null, null); return; }
-                var state = pr.IsDraft ? PrState.Draft
-                          : pr.State.Equals("MERGED", StringComparison.OrdinalIgnoreCase) ? PrState.Merged
-                          : pr.State.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) ? PrState.Closed
-                          : PrState.Open;
-                vm.Pr = new PullRequestVm
-                {
-                    Number = pr.Number, State = state,
-                    Branch = pr.HeadRefName, Base = pr.BaseRefName, MetaTail = pr.Title,
-                };
-                _db.UpdateSessionPr(vm.Id, pr.Number, state.ToString());
-            });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyPr(vm, info));
         }
         catch { /* best-effort */ }
     }
@@ -180,30 +171,34 @@ public sealed class SessionManager : IDisposable
     // or the branch has no associated PR. Called after a claude turn and on session load.
     public void RefreshPr(SessionVm s)
     {
-        try
-        {
-            var info = GhService.TryGetPullRequest(s.Worktree);
-            if (info is not { } pr)
-            {
-                s.Pr = null;
-                _db.UpdateSessionPr(s.Id, null, null);
-                return;
-            }
-            var state = pr.IsDraft ? PrState.Draft
-                      : pr.State.Equals("MERGED", StringComparison.OrdinalIgnoreCase) ? PrState.Merged
-                      : pr.State.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) ? PrState.Closed
-                      : PrState.Open;
-            s.Pr = new PullRequestVm
-            {
-                Number = pr.Number,
-                State = state,
-                Branch = pr.HeadRefName,
-                Base = pr.BaseRefName,
-                MetaTail = pr.Title,
-            };
-            _db.UpdateSessionPr(s.Id, pr.Number, state.ToString());
-        }
+        try { ApplyPr(s, GhService.TryGetPullRequest(s.Worktree)); }
         catch { /* best-effort */ }
+    }
+
+    // Apply a (possibly null) PR-info result to a session VM and the cached DB row. Must be
+    // called from the UI thread. Split out so background workers can fetch off-thread, then
+    // marshal the apply step here without duplicating the state-mapping logic.
+    public void ApplyPr(SessionVm s, GhService.PullRequestInfo? info)
+    {
+        if (info is not { } pr)
+        {
+            s.Pr = null;
+            _db.UpdateSessionPr(s.Id, null, null, null);
+            return;
+        }
+        var state = pr.IsDraft ? PrState.Draft
+                  : pr.State.Equals("MERGED", StringComparison.OrdinalIgnoreCase) ? PrState.Merged
+                  : pr.State.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) ? PrState.Closed
+                  : PrState.Open;
+        s.Pr = new PullRequestVm
+        {
+            Number = pr.Number,
+            State = state,
+            Branch = pr.HeadRefName,
+            Base = pr.BaseRefName,
+            MetaTail = pr.Title,
+        };
+        _db.UpdateSessionPr(s.Id, pr.Number, state.ToString(), pr.MergedAtUnixMs);
     }
 
     // Refresh diff stats for one session — call after a claude turn completes.

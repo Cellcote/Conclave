@@ -12,7 +12,8 @@ public static class GhService
 {
     public readonly record struct PullRequestInfo(
         int Number, string State, bool IsDraft,
-        string HeadRefName, string BaseRefName, string Title);
+        string HeadRefName, string BaseRefName, string Title,
+        long? MergedAtUnixMs);
 
     // null = "no PR found" or "gh not usable". Not distinguished — caller just hides the card.
     public static PullRequestInfo? TryGetPullRequest(string worktreePath)
@@ -22,7 +23,7 @@ public static class GhService
 
         var (code, stdout, _) = Run(worktreePath,
             "pr", "view",
-            "--json", "number,state,isDraft,headRefName,baseRefName,title");
+            "--json", "number,state,isDraft,headRefName,baseRefName,title,mergedAt");
         if (code != 0 || string.IsNullOrWhiteSpace(stdout)) return null;
 
         try
@@ -35,12 +36,27 @@ public static class GhService
                 IsDraft: r.TryGetProperty("isDraft", out var d) && d.ValueKind == JsonValueKind.True,
                 HeadRefName: Str(r, "headRefName") ?? "",
                 BaseRefName: Str(r, "baseRefName") ?? "",
-                Title: Str(r, "title") ?? "");
+                Title: Str(r, "title") ?? "",
+                MergedAtUnixMs: ParseMergedAt(Str(r, "mergedAt")));
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    // gh returns mergedAt as ISO-8601 (e.g. "2024-12-01T15:23:00Z") for merged PRs and the
+    // empty string / "0001-01-01T00:00:00Z" zero value for unmerged ones. Treat anything
+    // that doesn't parse, or is at/before the unix epoch, as null.
+    private static long? ParseMergedAt(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return null;
+        if (!DateTimeOffset.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var dto))
+            return null;
+        var ms = dto.ToUnixTimeMilliseconds();
+        return ms <= 0 ? null : ms;
     }
 
     private static bool GhAvailable()

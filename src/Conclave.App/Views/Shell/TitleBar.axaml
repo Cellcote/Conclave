@@ -8,7 +8,7 @@
             BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
             Background="{Binding Tokens.Bg}"
             PointerPressed="OnTitleBarPressed">
-        <Grid ColumnDefinitions="80,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto"
+        <Grid ColumnDefinitions="80,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto"
               VerticalAlignment="Center">
             <!-- Brand mark -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -56,8 +56,20 @@
                            FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
             </Border>
 
+            <!-- Preferences (gear) -->
+            <Border Grid.Column="8" Width="26" Height="22"
+                    CornerRadius="{Binding Tokens.RadSmCorner}"
+                    BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                    VerticalAlignment="Center" Margin="0,0,8,0"
+                    PointerPressed="OnPreferences" Cursor="Hand"
+                    ToolTip.Tip="Preferences">
+                <TextBlock Text="⚙" FontSize="13"
+                           Foreground="{Binding Tokens.TextDim}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
             <!-- New session (primary) -->
-            <Border Grid.Column="8" Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
+            <Border Grid.Column="9" Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
                     Background="{Binding Tokens.Text}" VerticalAlignment="Center" Margin="0,0,10,0"
                     PointerPressed="OnNewSession" Cursor="Hand">
                 <TextBlock Text="New session" FontSize="11.5" FontWeight="Medium"
