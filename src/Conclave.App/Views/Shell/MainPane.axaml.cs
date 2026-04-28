@@ -23,6 +23,8 @@ public partial class MainPane : UserControl
             composer.AddHandler(DragDrop.DragOverEvent, OnComposerDragOver);
             composer.AddHandler(DragDrop.DropEvent, OnComposerDrop);
         }
+        this.FindControl<TextBox>("ComposerBox")
+            ?.AddHandler(TextBox.KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
     }
 
     private void OnComposerDragOver(object? sender, DragEventArgs e)

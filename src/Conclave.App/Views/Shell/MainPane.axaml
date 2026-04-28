@@ -196,8 +196,7 @@
                          AcceptsReturn="True" TextWrapping="Wrap"
                          MinHeight="36" MaxHeight="220"
                          Padding="0"
-                         IsEnabled="{Binding HasActiveSession}"
-                         KeyDown="OnComposerKeyDown" />
+                         IsEnabled="{Binding HasActiveSession}" />
 
                 <ItemsControl ItemsSource="{Binding ComposerAttachments}"
                               IsVisible="{Binding HasComposerAttachments}">
