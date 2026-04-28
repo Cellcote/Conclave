@@ -101,6 +101,7 @@
         <ScrollViewer Grid.Row="1" x:Name="TranscriptScroller"
                       HorizontalScrollBarVisibility="Disabled" Padding="34,8,34,14"
                       IsVisible="{Binding IsTerminalView}">
+            <StackPanel>
             <ItemsControl x:Name="TranscriptList" ItemsSource="{Binding ActiveSession.Transcript}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TranscriptMessageVm">
@@ -166,6 +167,30 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- Throbber: tells the user we're waiting on claude. Bound to IsBusy so it
+                 covers both the pre-stream wait and tool-running periods. -->
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,18,0,4"
+                        IsVisible="{Binding ActiveSession.IsBusy, FallbackValue=False}">
+                <Border Width="6" Height="6" CornerRadius="3"
+                        Background="{Binding Tokens.AccentBrush}" VerticalAlignment="Center">
+                    <Border.Styles>
+                        <Style Selector="Border">
+                            <Style.Animations>
+                                <Animation Duration="0:0:1.2" IterationCount="INFINITE">
+                                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3" /></KeyFrame>
+                                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0" /></KeyFrame>
+                                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3" /></KeyFrame>
+                                </Animation>
+                            </Style.Animations>
+                        </Style>
+                    </Border.Styles>
+                </Border>
+                <TextBlock Text="Claude is thinking…" FontSize="12"
+                           FontStyle="Italic" Foreground="{Binding Tokens.TextDim}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            </StackPanel>
         </ScrollViewer>
 
         <!-- Plan view -->
