@@ -218,7 +218,10 @@ public sealed class Database : IDisposable
     public IReadOnlyList<Session> GetSessionsForProject(string projectId)
     {
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = $"SELECT {SessionColumns} FROM sessions WHERE project_id = $pid ORDER BY created_at ASC;";
+        // Most-recently-active first. Sessions only count as "active" when a turn finishes
+        // (see SessionManager.UpdateStatus) — intermediate tool calls don't bump them.
+        cmd.CommandText = $"SELECT {SessionColumns} FROM sessions WHERE project_id = $pid " +
+            "ORDER BY last_active_at DESC, created_at DESC;";
         cmd.Parameters.AddWithValue("$pid", projectId);
         var list = new List<Session>();
         using var r = cmd.ExecuteReader();
@@ -288,9 +291,11 @@ public sealed class Database : IDisposable
         ("$permissionMode", s.PermissionMode),
         ("$totalCostUsd", s.TotalCostUsd));
 
+    // Status-only update. last_active_at is bumped separately via TouchSession when a turn
+    // ends, so intermediate transitions (Working/RunningTool) don't reorder the sidebar.
     public void UpdateSessionStatus(string id, string status) => Exec(
-        "UPDATE sessions SET status = $status, last_active_at = $ts WHERE id = $id;",
-        ("$id", id), ("$status", status), ("$ts", Now()));
+        "UPDATE sessions SET status = $status WHERE id = $id;",
+        ("$id", id), ("$status", status));
 
     public void UpdateSessionDiff(string id, int files, int add, int del) => Exec(
         "UPDATE sessions SET diff_files = $files, diff_add = $add, diff_del = $del WHERE id = $id;",
