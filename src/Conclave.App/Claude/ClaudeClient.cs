@@ -52,7 +52,10 @@ public sealed class ClaudeClient
             psi.ArgumentList.Add(claudeSessionId);
         }
 
-        using var proc = Process.Start(psi)
+        // Spawn off the UI thread: Process.Start with three redirected pipes can block the
+        // calling thread long enough to swallow the layout pass for the just-appended user
+        // message, so the user's bubble doesn't paint until claude itself starts streaming.
+        using var proc = await Task.Run(() => Process.Start(psi), ct)
             ?? throw new InvalidOperationException("failed to spawn claude");
 
         // Collect stderr concurrently so it doesn't fill the pipe and deadlock us.
