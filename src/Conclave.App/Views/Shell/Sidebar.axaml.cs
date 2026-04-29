@@ -121,6 +121,18 @@ public partial class Sidebar : UserControl
             DeleteSession(shell, s);
     }
 
+    private void OnForkMenu(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem mi || mi.DataContext is not SessionVm s
+            || DataContext is not ShellVm shell) return;
+        try
+        {
+            var fork = shell.Manager.ForkSession(s);
+            shell.ActiveSession = fork;
+        }
+        catch (Exception ex) { shell.ShowError($"Fork session failed: {ex.Message}"); }
+    }
+
     private void OnRenameProjectMenu(object? sender, RoutedEventArgs e)
     {
         if (sender is MenuItem mi && mi.DataContext is ProjectVm p)

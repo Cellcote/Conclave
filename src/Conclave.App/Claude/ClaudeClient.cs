@@ -15,6 +15,8 @@ public sealed class ClaudeClient
         string? modelAlias,
         string? permissionMode = null,
         bool includePartialMessages = true,
+        string? forkFromSessionId = null,
+        string? appendSystemPrompt = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo("claude")
@@ -44,9 +46,24 @@ public sealed class ClaudeClient
             psi.ArgumentList.Add("--permission-mode");
             psi.ArgumentList.Add(permissionMode);
         }
-        // Only pass --resume if we have a well-formed UUID. Passing garbage makes claude
-        // fail with opaque errors; we'd rather start fresh than spew.
-        if (!string.IsNullOrEmpty(claudeSessionId) && Guid.TryParseExact(claudeSessionId, "D", out _))
+        if (!string.IsNullOrEmpty(appendSystemPrompt))
+        {
+            psi.ArgumentList.Add("--append-system-prompt");
+            psi.ArgumentList.Add(appendSystemPrompt);
+        }
+        // Resume target: prefer a fork-from id (first turn of a freshly forked session) over
+        // the regular resume id, since a forked session won't have its own ClaudeSessionId
+        // until the first SystemInitEvent comes back. `--fork-session` tells claude to mint
+        // a new session id from the resumed point instead of overwriting the original.
+        // Only pass UUIDs that are well-formed — passing garbage makes claude fail with
+        // opaque errors, and we'd rather start fresh than spew.
+        if (!string.IsNullOrEmpty(forkFromSessionId) && Guid.TryParseExact(forkFromSessionId, "D", out _))
+        {
+            psi.ArgumentList.Add("--resume");
+            psi.ArgumentList.Add(forkFromSessionId);
+            psi.ArgumentList.Add("--fork-session");
+        }
+        else if (!string.IsNullOrEmpty(claudeSessionId) && Guid.TryParseExact(claudeSessionId, "D", out _))
         {
             psi.ArgumentList.Add("--resume");
             psi.ArgumentList.Add(claudeSessionId);

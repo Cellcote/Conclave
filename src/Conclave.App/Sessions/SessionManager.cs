@@ -93,6 +93,7 @@ public sealed class SessionManager : IDisposable
         vm.ClaudeSessionId = s.ClaudeSessionId;
         vm.PermissionMode = string.IsNullOrEmpty(s.PermissionMode) ? "default" : s.PermissionMode;
         vm.TotalCostUsd = s.TotalCostUsd;
+        vm.PendingPreamble = s.PendingPreamble;
 
         // Restore Plan state if claude has ever run TodoWrite for this session.
         if (!string.IsNullOrEmpty(s.PlanJson))
@@ -235,6 +236,13 @@ public sealed class SessionManager : IDisposable
         s.ClaudeSessionId = claudeSessionId;
     }
 
+    public void ClearPendingPreamble(SessionVm s)
+    {
+        if (s.PendingPreamble is null) return;
+        _db.UpdateSessionPendingPreamble(s.Id, null);
+        s.PendingPreamble = null;
+    }
+
     public void PersistPlan(SessionVm s, string? planJson) =>
         _db.UpdateSessionPlan(s.Id, planJson);
 
@@ -269,6 +277,7 @@ public sealed class SessionManager : IDisposable
                 Time = DateTimeOffset.FromUnixTimeMilliseconds(row.CreatedAt)
                     .ToLocalTime().ToString("HH:mm"),
                 Content = row.Content,
+                ClaudeUuid = row.ClaudeUuid,
             };
             if (!string.IsNullOrEmpty(row.ToolsJson))
             {
@@ -291,7 +300,17 @@ public sealed class SessionManager : IDisposable
             ToolsJson = msg.Tools.Count > 0 ? SerializeTools(msg.Tools) : null,
             CreatedAt = Database.Now(),
             Seq = _db.NextSeq(session.Id),
+            ClaudeUuid = msg.ClaudeUuid,
         });
+    }
+
+    // Update claude's per-message uuid after the assistant message has been persisted.
+    // Stream-delta paths insert the row before the AssistantEvent arrives (which is what
+    // carries the uuid), so we set it as a follow-up rather than at insert time.
+    public void UpdateMessageClaudeUuid(TranscriptMessageVm msg)
+    {
+        if (string.IsNullOrEmpty(msg.ClaudeUuid)) return;
+        _db.UpdateMessageClaudeUuid(msg.Id, msg.ClaudeUuid);
     }
 
     // Called when tool status/meta changes after its enclosing message was already persisted.
@@ -473,6 +492,170 @@ public sealed class SessionManager : IDisposable
         var vm = BuildSessionVm(s);
         project.Sessions.Insert(0, vm);
         return vm;
+    }
+
+    // Fork: spawn a new session that branches off the source's current state. The new
+    // worktree starts at the source's HEAD with its uncommitted tracked changes carried over
+    // (untracked files are skipped — v1 limitation). The transcript is copied wholesale so
+    // the UI reads continuously, and the source's claude session id is staged so the first
+    // turn passes `--fork-session`, making the model retain its prior context.
+    public SessionVm ForkSession(SessionVm source)
+    {
+        var project = FindProjectOf(source)
+            ?? throw new InvalidOperationException("source session is not in any project");
+        var projectRecord = _db.GetProject(project.Id)
+            ?? throw new InvalidOperationException($"project {project.Id} not found");
+
+        var sourceSlug = DeriveSlug(source.Branch);
+        var forkSuffix = Guid.NewGuid().ToString("N")[..6];
+        var slug = $"{sourceSlug}-fork-{forkSuffix}";
+        var branch = $"conclave/{slug}";
+        var wtPath = Path.Combine(_worktreeRoot, project.Id, slug);
+
+        WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, wtPath, branch);
+
+        var now = Database.Now();
+        var s = new Session
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ProjectId = project.Id,
+            Name = $"Fork of {source.Title}",
+            BranchName = branch,
+            WorktreePath = wtPath,
+            BaseBranch = source.BaseBranch,
+            Model = source.Model,
+            Status = SessionStatus.Idle.ToString(),
+            PermissionMode = source.PermissionMode,
+            CreatedAt = now,
+            LastActiveAt = now,
+        };
+        _db.InsertSession(s);
+
+        foreach (var row in _db.GetMessages(source.Id))
+        {
+            _db.InsertMessage(new MessageRow
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SessionId = s.Id,
+                Role = row.Role,
+                Content = row.Content,
+                ToolsJson = row.ToolsJson,
+                CreatedAt = row.CreatedAt,
+                Seq = row.Seq,
+                ClaudeUuid = row.ClaudeUuid,
+            });
+        }
+
+        var vm = BuildSessionVm(s);
+        vm.PendingForkFromClaudeSessionId = source.ClaudeSessionId;
+
+        var idx = project.Sessions.IndexOf(source);
+        if (idx < 0) project.Sessions.Insert(0, vm);
+        else project.Sessions.Insert(idx + 1, vm);
+        return vm;
+    }
+
+    // Fork at a specific message: same shape as ForkSession, but the new session's transcript
+    // is truncated at `forkPoint` and the prior conversation is injected as a system-prompt
+    // preamble on the first turn (path A — synthetic context). The model sees a "you have
+    // already had this conversation" prelude rather than truly resuming server-side state,
+    // since the CLI's --fork-session only forks at the resumed session's tail, not at an
+    // arbitrary point.
+    public SessionVm ForkSessionAtMessage(SessionVm source, TranscriptMessageVm forkPoint)
+    {
+        var project = FindProjectOf(source)
+            ?? throw new InvalidOperationException("source session is not in any project");
+        var projectRecord = _db.GetProject(project.Id)
+            ?? throw new InvalidOperationException($"project {project.Id} not found");
+
+        // Pull the source's persisted messages and truncate at the fork point. We use the DB
+        // (not the in-memory Transcript) because tool-result updates are persisted out-of-band
+        // and we want the authoritative on-disk content.
+        var allMessages = _db.GetMessages(source.Id);
+        var keep = new List<MessageRow>();
+        foreach (var m in allMessages)
+        {
+            keep.Add(m);
+            if (m.Id == forkPoint.Id) break;
+        }
+        if (keep.Count == 0 || keep[^1].Id != forkPoint.Id)
+            throw new InvalidOperationException("fork point not found in source session");
+
+        var sourceSlug = DeriveSlug(source.Branch);
+        var forkSuffix = Guid.NewGuid().ToString("N")[..6];
+        var slug = $"{sourceSlug}-fork-{forkSuffix}";
+        var branch = $"conclave/{slug}";
+        var wtPath = Path.Combine(_worktreeRoot, project.Id, slug);
+
+        WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, wtPath, branch);
+
+        var preamble = BuildForkPreamble(keep);
+
+        var now = Database.Now();
+        var s = new Session
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ProjectId = project.Id,
+            Name = $"Fork of {source.Title}",
+            BranchName = branch,
+            WorktreePath = wtPath,
+            BaseBranch = source.BaseBranch,
+            Model = source.Model,
+            Status = SessionStatus.Idle.ToString(),
+            PermissionMode = source.PermissionMode,
+            CreatedAt = now,
+            LastActiveAt = now,
+            PendingPreamble = preamble,
+        };
+        _db.InsertSession(s);
+
+        foreach (var row in keep)
+        {
+            _db.InsertMessage(new MessageRow
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SessionId = s.Id,
+                Role = row.Role,
+                Content = row.Content,
+                ToolsJson = row.ToolsJson,
+                CreatedAt = row.CreatedAt,
+                Seq = row.Seq,
+                ClaudeUuid = row.ClaudeUuid,
+            });
+        }
+
+        var vm = BuildSessionVm(s);
+
+        var idx = project.Sessions.IndexOf(source);
+        if (idx < 0) project.Sessions.Insert(0, vm);
+        else project.Sessions.Insert(idx + 1, vm);
+        return vm;
+    }
+
+    // Build the system-prompt preamble for a fork-at-message session. Includes only message
+    // text (tool calls + their outputs are summarised in aggregate) to keep the token cost
+    // bounded, since the whole thing rides on every turn until the first one consumes it.
+    private static string BuildForkPreamble(IReadOnlyList<MessageRow> messages)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(
+            "You are continuing a forked Claude Code session. The user picked a branch point " +
+            "in a prior conversation; the text exchange up to that point is reproduced below " +
+            "(tool calls and their outputs have been omitted for brevity). Treat this as your " +
+            "own prior reasoning and the user's prior input — do NOT summarise it back at the " +
+            "user; just respond naturally to whatever they say next.");
+        sb.AppendLine();
+        sb.AppendLine("--- PRIOR TRANSCRIPT ---");
+        foreach (var m in messages)
+        {
+            if (string.IsNullOrWhiteSpace(m.Content)) continue;
+            sb.AppendLine();
+            sb.AppendLine(m.Role.Equals("User", StringComparison.OrdinalIgnoreCase) ? "USER:" : "ASSISTANT:");
+            sb.AppendLine(m.Content);
+        }
+        sb.AppendLine();
+        sb.AppendLine("--- END PRIOR TRANSCRIPT ---");
+        return sb.ToString();
     }
 
     public void RenameSession(SessionVm s, string newName)

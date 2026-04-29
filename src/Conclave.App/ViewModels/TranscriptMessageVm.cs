@@ -10,6 +10,10 @@ public sealed class TranscriptMessageVm : Views.Observable
     public string Id { get; init; } = "";  // UUID — matches the `id` column in the messages table.
     public Tokens Tokens { get; init; } = null!;
     public MessageRole Role { get; init; }
+    // Claude's per-message UUID from AssistantEvent. Null for user messages and for messages
+    // persisted before this column existed. Lets future fork-at-message paths target the
+    // CLI's JSONL session storage; not used directly by path A's synthetic-context fork.
+    public string? ClaudeUuid { get; set; }
     public ObservableCollection<ToolCallVm> Tools { get; } = new();
 
     private string _time = "";

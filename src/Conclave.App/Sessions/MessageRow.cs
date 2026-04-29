@@ -12,4 +12,8 @@ public sealed record MessageRow
     public string? ToolsJson { get; init; }
     public long CreatedAt { get; init; }
     public int Seq { get; init; }
+    // Claude's per-message UUID from the AssistantEvent stream. Null for our locally-minted
+    // user messages and for messages persisted before this column was added. Captured to
+    // enable future fork-at-message paths that target claude's own JSONL session storage.
+    public string? ClaudeUuid { get; init; }
 }

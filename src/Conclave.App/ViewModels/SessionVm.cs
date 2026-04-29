@@ -37,6 +37,20 @@ public sealed class SessionVm : Views.Observable
     // Passed back to claude via --resume on subsequent turns.
     public string? ClaudeSessionId { get => _claudeSessionId; set => Set(ref _claudeSessionId, value); }
 
+    // Set on a freshly-forked session so its first turn passes `--resume <source> --fork-session`,
+    // which makes claude branch a new server-side session that retains the source's context.
+    // Cleared as soon as ClaudeSessionId is populated from the first SystemInitEvent. Transient
+    // (not persisted): on app restart a partial fork either succeeded — ClaudeSessionId is set —
+    // or it didn't, in which case the next turn just starts fresh, and the model can still read
+    // the copied transcript from disk if needed via tools.
+    public string? PendingForkFromClaudeSessionId { get; set; }
+
+    // System-prompt context to inject on the next turn via `--append-system-prompt`. Mirrors
+    // sessions.pending_preamble — populated for fork-at-message sessions, cleared after the
+    // first turn that consumes it.
+    private string? _pendingPreamble;
+    public string? PendingPreamble { get => _pendingPreamble; set => Set(ref _pendingPreamble, value); }
+
     private string _title = "";
     public string Title { get => _title; set => Set(ref _title, value); }
 

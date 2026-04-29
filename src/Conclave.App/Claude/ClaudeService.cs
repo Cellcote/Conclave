@@ -54,6 +54,10 @@ public sealed class ClaudeService
         // The final `assistant` event is still authoritative; we reuse the live VM on match.
         var liveByMessageId = new Dictionary<string, TranscriptMessageVm>();
 
+        // Capture once at turn start — any clear that happens mid-stream (or the next turn's
+        // clear) should not affect this in-flight invocation's args.
+        var preamble = session.PendingPreamble;
+
         try
         {
             var modelAlias = ClaudeClient.ModelAliasFromDisplay(session.Model);
@@ -64,10 +68,17 @@ public sealed class ClaudeService
                 modelAlias,
                 permissionMode: session.PermissionMode,
                 includePartialMessages: true,
+                forkFromSessionId: session.PendingForkFromClaudeSessionId,
+                appendSystemPrompt: preamble,
                 ct: linked.Token))
             {
                 Handle(session, ev, toolsById, messageByToolId, liveByMessageId);
             }
+            // The stream completed without throwing — claude has consumed the preamble (it
+            // was injected into the system prompt of this invocation). Clear it so future
+            // turns don't keep re-injecting (which would just waste tokens).
+            if (preamble is not null)
+                _manager.ClearPendingPreamble(session);
         }
         catch (OperationCanceledException)
         {
@@ -117,7 +128,12 @@ public sealed class ClaudeService
         {
             case SystemInitEvent init:
                 if (string.IsNullOrEmpty(session.ClaudeSessionId) && !string.IsNullOrEmpty(init.SessionId))
+                {
                     _manager.UpdateClaudeSessionId(session, init.SessionId);
+                    // Once claude has minted our own session id, the fork is durable and
+                    // future turns should --resume it directly, not re-fork from the source.
+                    session.PendingForkFromClaudeSessionId = null;
+                }
                 break;
 
             case StreamDeltaEvent delta:
@@ -281,6 +297,10 @@ public sealed class ClaudeService
         // text from the final event to correct any race / missed delta. For fresh messages,
         // this is the initial set.
         message.Content = buf.ToString();
+        // Capture claude's per-event uuid so future fork-at-message paths can map our row
+        // back to claude's JSONL event chain. AssistantEvent carries the final, authoritative
+        // uuid for the logical message — message_start deltas have their own (different) uuids.
+        if (!string.IsNullOrEmpty(asst.Uuid)) message.ClaudeUuid = asst.Uuid;
 
         // Claude sometimes emits an assistant event with only tool calls and no text, or only
         // text and no tools. Only add the message if it has something to show.
@@ -290,6 +310,7 @@ public sealed class ClaudeService
             {
                 // Live path: row already inserted on message_start; update it.
                 _manager.UpdateMessageTools(message);
+                _manager.UpdateMessageClaudeUuid(message);
             }
             else
             {
