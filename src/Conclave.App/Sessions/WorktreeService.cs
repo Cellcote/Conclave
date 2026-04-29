@@ -161,6 +161,13 @@ public static class WorktreeService
         {
             using var proc = Process.Start(psi);
             if (proc is null) return;
+            // Drain stdout/stderr concurrently — `git apply --3way` can emit enough
+            // conflict/progress output to fill the pipe buffer (~64KB), at which point the
+            // child blocks on write and our WaitForExit hangs forever.
+            proc.OutputDataReceived += (_, _) => { };
+            proc.ErrorDataReceived += (_, _) => { };
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
             proc.StandardInput.Write(patch);
             proc.StandardInput.Close();
             proc.WaitForExit();
