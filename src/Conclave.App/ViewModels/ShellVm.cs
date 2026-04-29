@@ -99,6 +99,50 @@ public sealed class ShellVm : Views.Observable
     public void OpenNewSessionForProject(ProjectVm project) => NewSession = new NewSessionVm(Tokens, Projects) { Project = project };
     public void CancelNewSession() => NewSession = null;
 
+    // --- Preferences ---
+
+    public AutoCleanupService? AutoCleanup { get; set; }
+
+    private bool _isPreferencesOpen;
+    public bool IsPreferencesOpen
+    {
+        get => _isPreferencesOpen;
+        set => Set(ref _isPreferencesOpen, value);
+    }
+
+    public void OpenPreferences() => IsPreferencesOpen = true;
+    public void ClosePreferences() => IsPreferencesOpen = false;
+
+    public bool AutoCleanupEnabled
+    {
+        get => SettingsKeys.ReadAutoCleanupEnabled(Manager.Db);
+        set
+        {
+            if (value == AutoCleanupEnabled) return;
+            Manager.Db.SetSetting(SettingsKeys.AutoCleanupEnabled, value ? "true" : "false");
+            Notify();
+        }
+    }
+
+    public int AutoCleanupDays
+    {
+        get => SettingsKeys.ReadAutoCleanupDays(Manager.Db);
+        set
+        {
+            var clamped = value < 1 ? 1 : value;
+            if (clamped == AutoCleanupDays) return;
+            Manager.Db.SetSetting(SettingsKeys.AutoCleanupDays, clamped.ToString());
+            Notify();
+        }
+    }
+
+    public async Task RunCleanupNowAsync()
+    {
+        if (AutoCleanup is null) return;
+        try { await AutoCleanup.RunOnceAsync(); }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
     // --- Search ---
 
     private string _searchQuery = "";

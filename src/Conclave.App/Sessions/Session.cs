@@ -20,6 +20,7 @@ public sealed record Session
     public int UnreadCount { get; init; }
     public int? PrNumber { get; init; }
     public string? PrState { get; init; }
+    public long? PrMergedAt { get; init; }
     public int DiffFiles { get; init; }
     public int DiffAdd { get; init; }
     public int DiffDel { get; init; }

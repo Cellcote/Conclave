@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private const double RightCollapseThreshold = 1080;
 
     private SessionManager? _manager;
+    private AutoCleanupService? _autoCleanup;
     private ShellVm? _shell;
 
     private double _savedRightPanelWidth = 320;
@@ -46,10 +47,19 @@ public partial class MainWindow : Window
         _shell = new ShellVm(tokens, _manager, capabilities);
         _shell.SendRequested += (session, prompt) => claudeService.RunTurnAsync(session, prompt);
         _shell.PropertyChanged += OnShellPropertyChanged;
+
+        _autoCleanup = new AutoCleanupService(_manager);
+        _shell.AutoCleanup = _autoCleanup;
+        _autoCleanup.Start();
+
         DataContext = _shell;
 
         SizeChanged += (_, e) => ApplyResponsiveLayout(e.NewSize.Width, _shell?.HasActiveSession ?? false);
-        Closing += (_, _) => _manager?.Dispose();
+        Closing += (_, _) =>
+        {
+            _autoCleanup?.Dispose();
+            _manager?.Dispose();
+        };
     }
 
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
