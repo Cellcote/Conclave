@@ -296,9 +296,15 @@ public sealed class ClaudeService
                     if (tu.Name == "TodoWrite") UpdatePlanFromTodoWrite(session, tu.InputJson);
                     // AskUserQuestion + ExitPlanMode are interactive — claude is waiting on
                     // the user. EnterPlanMode is just claude announcing it switched modes,
-                    // not a question, so it stays out of this branch.
+                    // not a question, so it stays out of this branch. Fire both a native
+                    // notification (so the user is pulled back to the window) and a session
+                    // log warning (so the persistent record explains why the session is stuck
+                    // and how to recover).
                     if (tu.Name is "AskUserQuestion" or "ExitPlanMode")
+                    {
                         _manager.Notifications?.NotifyQuestionPending(session.Title, vm.Target);
+                        WarnUnhandledInteractiveTool(session, tu.Name);
+                    }
                     break;
             }
         }
@@ -329,6 +335,18 @@ public sealed class ClaudeService
         if (hasToolUse)
             _manager.UpdateStatus(session, SessionStatus.RunningTool);
     }
+
+    // AskUserQuestion and ExitPlanMode are interactive tools that the Agent SDK normally
+    // satisfies via a `canUseTool` callback. Our CLI-based integration has no such hook —
+    // claude emits the tool_use, the user sees it in the transcript, and then the model
+    // sits there forever waiting for a tool_result we cannot supply. Surface a warning in
+    // the session log so the user understands why the session looks frozen and what to do.
+    // Tracked under "Permission handling — option 1 shipped" in PHASE_4.md.
+    private static void WarnUnhandledInteractiveTool(SessionVm session, string toolName) =>
+        Log(session, LogLevel.Wrn,
+            $"{toolName} invoked but Conclave's CLI integration can't answer it. " +
+            "Claude will wait for a response that won't arrive — cancel the turn and rephrase, " +
+            "or set permission mode to 'Full access' so the model doesn't gate on it.");
 
     private void UpdatePlanFromTodoWrite(SessionVm session, string inputJson)
     {
