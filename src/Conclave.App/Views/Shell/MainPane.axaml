@@ -223,12 +223,14 @@
                          Padding="0"
                          IsEnabled="{Binding HasActiveSession}">
                     <!-- FluentTheme draws a thick accent border on focus regardless
-                         of BorderThickness="0". Override the focus-state resources
-                         so the outer composer Border is the sole focus indicator. -->
+                         of BorderThickness="0". Override the focus- and hover-state
+                         resources so the outer composer Border is the sole indicator. -->
                     <TextBox.Resources>
                         <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                         <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
                         <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                        <Thickness x:Key="TextControlBorderThemeThicknessPointerOver">0</Thickness>
+                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                         <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
                     </TextBox.Resources>
                 </TextBox>
