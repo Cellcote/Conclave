@@ -24,6 +24,12 @@ public sealed class PtySession : IAsyncDisposable
         _readTask = Task.Run(ReadLoop);
     }
 
+    // Bounded so a runaway producer (`yes`, a misbehaving TUI) can't allocate without
+    // limit while the UI is busy. 256 chunks × 8KB read buf = up to ~2MB queued. When
+    // the channel is full, ReadLoop's WriteAsync blocks; the PTY pipe fills; the child
+    // eventually blocks on its own write — natural backpressure.
+    private const int ChannelCapacity = 256;
+
     public static async Task<PtySession> SpawnAsync(int cols, int rows, string? workingDirectory = null)
     {
         string? app = ResolveCommand();
@@ -37,10 +43,11 @@ public sealed class PtySession : IAsyncDisposable
             Environment = BuildEnvironment(),
         };
         var pty = await PtyProvider.SpawnAsync(options, CancellationToken.None);
-        var channel = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions
+        var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(ChannelCapacity)
         {
             SingleReader = true,
             SingleWriter = true,
+            FullMode = BoundedChannelFullMode.Wait,
         });
         return new PtySession(pty, channel);
     }

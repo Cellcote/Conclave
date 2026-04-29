@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
-using Avalonia.Threading;
 
 namespace Conclave.App.Terminal;
 
@@ -24,8 +23,9 @@ public sealed class TerminalControl : Control
     // Set before the control is attached to the visual tree to pin the child process's cwd.
     public string? WorkingDirectory { get; set; }
 
-    private DispatcherTimer? _pumpTimer;
-    private bool _dirtyPending;
+    // Cancellation source for the async pump loop. Triggered on detach so the loop
+    // exits its WaitToReadAsync without leaking a Task.
+    private CancellationTokenSource? _pumpCts;
 
     // Transient buffers reused per Render frame to avoid per-frame allocations.
     private readonly StringBuilder _runChars = new(256);
@@ -44,16 +44,14 @@ public sealed class TerminalControl : Control
         base.OnAttachedToVisualTree(e);
         Focus();
         _ = StartSessionAsync();
-
-        _pumpTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(8), DispatcherPriority.Render, Pump);
-        _pumpTimer.Start();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        _pumpTimer?.Stop();
-        _pumpTimer = null;
+        _pumpCts?.Cancel();
+        _pumpCts?.Dispose();
+        _pumpCts = null;
         if (_session is { } s) _ = s.DisposeAsync();
         _session = null;
     }
@@ -72,25 +70,32 @@ public sealed class TerminalControl : Control
             _buffer.LineFeed();
             _buffer.CarriageReturn();
             InvalidateVisual();
+            return;
         }
+
+        // Pump loop runs on the UI thread (StartSessionAsync was awaited from
+        // OnAttachedToVisualTree, which captures the dispatcher SyncContext) so
+        // _parser.Feed and the buffer it mutates stay on a single thread alongside
+        // Render. WaitToReadAsync suspends with zero CPU when nothing's queued —
+        // unlike the previous 125Hz timer that fired even when idle.
+        _pumpCts = new CancellationTokenSource();
+        _ = PumpLoopAsync(_pumpCts.Token);
     }
 
-    private void Pump(object? sender, EventArgs e)
+    private async Task PumpLoopAsync(CancellationToken ct)
     {
-        if (_session is null) return;
-        var reader = _session.Output;
+        var reader = _session?.Output;
+        if (reader is null) return;
 
-        bool any = false;
-        while (reader.TryRead(out var chunk))
+        try
         {
-            _parser.Feed(chunk);
-            any = true;
+            while (await reader.WaitToReadAsync(ct))
+            {
+                while (reader.TryRead(out var chunk)) _parser.Feed(chunk);
+                InvalidateVisual();
+            }
         }
-        if (any || _dirtyPending)
-        {
-            _dirtyPending = false;
-            InvalidateVisual();
-        }
+        catch (OperationCanceledException) { /* detach */ }
     }
 
     protected override Size MeasureOverride(Size availableSize) => availableSize;
@@ -109,7 +114,10 @@ public sealed class TerminalControl : Control
         if (cols == _buffer.Cols && rows == _buffer.Rows) return;
         _buffer.Resize(cols, rows);
         _session?.Resize(cols, rows);
-        _dirtyPending = true;
+        // Pump loop only wakes on PTY output; if the shell is parked at a static prompt
+        // there's no incoming chunk to drive a repaint. Invalidate directly here so the
+        // resized buffer paints on the next frame.
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext ctx)
