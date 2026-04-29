@@ -170,7 +170,15 @@ public static class WorktreeService
             proc.BeginErrorReadLine();
             proc.StandardInput.Write(patch);
             proc.StandardInput.Close();
-            proc.WaitForExit();
+            if (!proc.WaitForExit(RunTimeoutMs))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+            }
+            else
+            {
+                // Drain async readers — see the matching note in Run().
+                proc.WaitForExit();
+            }
         }
         catch { /* best-effort */ }
     }
@@ -243,6 +251,10 @@ public static class WorktreeService
         }
     }
 
+    // Hard cap so a hung git invocation (network-backed remote, fs lock, etc.) doesn't
+    // freeze the UI thread — session create/delete and diff refresh run there.
+    private const int RunTimeoutMs = 15_000;
+
     private static (int Code, string Stdout, string Stderr) Run(string cwd, params string[] args)
     {
         var psi = new ProcessStartInfo("git")
@@ -263,6 +275,15 @@ public static class WorktreeService
         proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
+        if (!proc.WaitForExit(RunTimeoutMs))
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { }
+            return (-1, stdout.ToString(), stderr.ToString());
+        }
+        // The timed WaitForExit returns once the process has exited, but the async
+        // OutputDataReceived/ErrorDataReceived callbacks may still have buffered data in
+        // flight. The zero-arg overload blocks until those handlers drain, ensuring
+        // stdout/stderr aren't truncated for noisier subcommands (git diff, git apply).
         proc.WaitForExit();
         return (proc.ExitCode, stdout.ToString(), stderr.ToString());
     }
