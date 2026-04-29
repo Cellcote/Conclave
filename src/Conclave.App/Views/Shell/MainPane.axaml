@@ -111,7 +111,8 @@
                         <StackPanel>
                             <StackPanel.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Fork from here" Click="OnForkFromHereMenu" />
+                                    <MenuItem Header="Fork from here" Click="OnForkFromHereMenu"
+                                              IsEnabled="{Binding !$parent[UserControl].DataContext.ActiveSession.IsBusy}" />
                                 </ContextMenu>
                             </StackPanel.ContextMenu>
                             <!-- Header row (hidden on consecutive same-role messages) -->

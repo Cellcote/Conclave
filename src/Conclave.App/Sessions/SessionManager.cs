@@ -542,6 +542,7 @@ public sealed class SessionManager : IDisposable
                 ToolsJson = row.ToolsJson,
                 CreatedAt = row.CreatedAt,
                 Seq = row.Seq,
+                ClaudeUuid = row.ClaudeUuid,
             });
         }
 

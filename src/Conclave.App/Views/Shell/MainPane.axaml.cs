@@ -85,6 +85,12 @@ public partial class MainPane : UserControl
     {
         if (sender is not MenuItem mi || mi.DataContext is not TranscriptMessageVm msg
             || DataContext is not ShellVm shell || shell.ActiveSession is not { } source) return;
+        // Mid-turn forking would copy a partially-streamed last message (its row exists
+        // from message_start, but its final content arrives with the AssistantEvent), and
+        // the preamble would carry that incomplete text. The IsEnabled binding on the menu
+        // item already prevents this in normal use; this guard catches keyboard activation
+        // and any future code path that bypasses the binding.
+        if (source.IsBusy) return;
         try
         {
             var fork = shell.Manager.ForkSessionAtMessage(source, msg);
