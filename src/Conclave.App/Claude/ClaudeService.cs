@@ -70,6 +70,7 @@ public sealed class ClaudeService
                 includePartialMessages: true,
                 forkFromSessionId: session.PendingForkFromClaudeSessionId,
                 appendSystemPrompt: preamble,
+                additionalDirs: session.AdditionalDirs.Count > 0 ? session.AdditionalDirs : null,
                 ct: linked.Token))
             {
                 Handle(session, ev, toolsById, messageByToolId, liveByMessageId);

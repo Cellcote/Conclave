@@ -17,6 +17,7 @@ public sealed class ClaudeClient
         bool includePartialMessages = true,
         string? forkFromSessionId = null,
         string? appendSystemPrompt = null,
+        IReadOnlyList<string>? additionalDirs = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo("claude")
@@ -50,6 +51,15 @@ public sealed class ClaudeClient
         {
             psi.ArgumentList.Add("--append-system-prompt");
             psi.ArgumentList.Add(appendSystemPrompt);
+        }
+        if (additionalDirs is not null)
+        {
+            foreach (var dir in additionalDirs)
+            {
+                if (string.IsNullOrEmpty(dir)) continue;
+                psi.ArgumentList.Add("--add-dir");
+                psi.ArgumentList.Add(dir);
+            }
         }
         // Resume target: prefer a fork-from id (first turn of a freshly forked session) over
         // the regular resume id, since a forked session won't have its own ClaudeSessionId

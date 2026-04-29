@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Conclave.App.Design;
+using Conclave.App.Sessions;
 
 namespace Conclave.App.ViewModels;
 
@@ -10,6 +11,11 @@ public sealed class ProjectVm : Views.Observable
     public string Id { get; init; } = "";
     public string Path { get; init; } = "";
     public string DefaultBranch { get; init; } = "main";
+    public string Kind { get; init; } = ProjectKinds.Repo;
+    public bool IsFusion => Kind == ProjectKinds.Fusion;
+
+    // Member project ids in ordinal order. Empty for repo-kind projects. Ordinal 0 == primary.
+    public IList<string> MemberIds { get; } = new List<string>();
 
     private string _name = "";
     public string Name { get => _name; set => Set(ref _name, value); }
