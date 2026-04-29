@@ -138,6 +138,7 @@ public partial class Sidebar : UserControl
 
     private void OnProjectHeaderPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (!e.GetCurrentPoint(sender as Visual).Properties.IsLeftButtonPressed) return;
         if (sender is Control c && c.DataContext is ProjectVm p && !p.IsEditing)
         {
             p.IsExpanded = !p.IsExpanded;
