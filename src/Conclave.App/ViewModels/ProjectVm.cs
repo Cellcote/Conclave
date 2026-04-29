@@ -32,6 +32,15 @@ public sealed class ProjectVm : Views.Observable
     private bool _isVisibleInTree = true;
     public bool IsVisibleInTree { get => _isVisibleInTree; set => Set(ref _isVisibleInTree, value); }
 
+    private bool _isExpanded = true;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set { if (Set(ref _isExpanded, value)) Notify(nameof(ChevronGlyph)); }
+    }
+
+    public string ChevronGlyph => _isExpanded ? "▾" : "▸";
+
     public ProjectVm(Tokens tokens)
     {
         Tokens = tokens;
