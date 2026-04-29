@@ -41,11 +41,7 @@ public sealed class AutoCleanupService : IDisposable
 
         while (!ct.IsCancellationRequested)
         {
-            try
-            {
-                if (SettingsKeys.ReadAutoCleanupEnabled(_manager.Db))
-                    await TickAsync(respectEnabled: true, ct);
-            }
+            try { await TickAsync(respectEnabled: true, ct); }
             catch { /* never let the loop die — try again next tick */ }
 
             try { await Task.Delay(TickInterval, ct); } catch (TaskCanceledException) { return; }
@@ -58,27 +54,40 @@ public sealed class AutoCleanupService : IDisposable
 
     private async Task TickAsync(bool respectEnabled, CancellationToken ct)
     {
-        if (respectEnabled && !SettingsKeys.ReadAutoCleanupEnabled(_manager.Db)) return;
-        var thresholdMs = (long)TimeSpan.FromDays(SettingsKeys.ReadAutoCleanupDays(_manager.Db))
-            .TotalMilliseconds;
+        // Read settings AND snapshot sessions inside a single UI-thread hop. Database owns
+        // a single SqliteConnection that the rest of the app touches only from the UI
+        // thread, so any settings/session-row read or write must run there. Background work
+        // (the gh fetches below) reuses the snapshot without going back to the DB.
+        var prep = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var enabled = SettingsKeys.ReadAutoCleanupEnabled(_manager.Db);
+            var thresholdMs = (long)TimeSpan
+                .FromDays(SettingsKeys.ReadAutoCleanupDays(_manager.Db))
+                .TotalMilliseconds;
+            var sessions = _manager.Projects
+                .SelectMany(p => p.Sessions)
+                .Select(s => (Session: s, HasPr: s.Pr is not null, Worktree: s.Worktree))
+                .ToArray();
+            return (enabled, thresholdMs, sessions);
+        });
 
-        var sessions = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-            _manager.Projects.SelectMany(p => p.Sessions).ToArray());
+        if (respectEnabled && !prep.enabled) return;
 
         // Force a PR refresh on every session that has a cached PR — even open ones — so
         // mergedAt lands for PRs that were merged while Conclave was closed. Skip sessions
         // with no PR record at all (never had one) to keep the gh process count down.
-        foreach (var s in sessions)
+        foreach (var (session, hasPr, worktree) in prep.sessions)
         {
             if (ct.IsCancellationRequested) return;
-            if (s.Pr is null) continue;
+            if (!hasPr) continue;
 
             GhService.PullRequestInfo? info = null;
-            try { info = GhService.TryGetPullRequest(s.Worktree); } catch { /* ignore */ }
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => _manager.ApplyPr(s, info));
+            try { info = GhService.TryGetPullRequest(worktree); } catch { /* ignore */ }
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => _manager.ApplyPr(session, info));
         }
 
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => Sweep(sessions, thresholdMs));
+        var live = prep.sessions.Select(t => t.Session).ToArray();
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => Sweep(live, prep.thresholdMs));
     }
 
     private void Sweep(SessionVm[] sessions, long thresholdMs)
