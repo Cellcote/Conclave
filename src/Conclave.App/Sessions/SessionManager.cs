@@ -19,6 +19,9 @@ public sealed class SessionManager : IDisposable
     // can read/write directly without re-routing every helper through this class.
     public Database Db => _db;
 
+    // Wired by MainWindow at startup. Optional — when null, no native notifications fire.
+    public NotificationService? Notifications { get; set; }
+
     public SessionManager(Database db, string worktreeRoot, Tokens tokens)
     {
         _db = db;
@@ -379,6 +382,7 @@ public sealed class SessionManager : IDisposable
 
     public void UpdateStatus(SessionVm s, SessionStatus status)
     {
+        var previous = s.Status;
         _db.UpdateSessionStatus(s.Id, status.ToString());
         s.Status = status;
         // Only "claude is done" transitions bump the session — intermediate Working /
@@ -387,6 +391,10 @@ public sealed class SessionManager : IDisposable
         {
             _db.TouchSession(s.Id);
             BumpToTop(s);
+            // Only notify on a real busy→done transition. App-load resets and session
+            // creation also pass through here at Idle but stay Idle — those mustn't fire.
+            if (previous is SessionStatus.Working or SessionStatus.RunningTool)
+                Notifications?.NotifyTurnComplete(s.Title, status == SessionStatus.Error);
         }
     }
 

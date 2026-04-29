@@ -289,6 +289,11 @@ public sealed class ClaudeService
                     toolsById[tu.Id] = vm;
                     messageByToolId[tu.Id] = message;
                     if (tu.Name == "TodoWrite") UpdatePlanFromTodoWrite(session, tu.InputJson);
+                    // AskUserQuestion + ExitPlanMode are interactive — claude is waiting on
+                    // the user. EnterPlanMode is just claude announcing it switched modes,
+                    // not a question, so it stays out of this branch.
+                    if (tu.Name is "AskUserQuestion" or "ExitPlanMode")
+                        _manager.Notifications?.NotifyQuestionPending(session.Title, vm.Target);
                     break;
             }
         }

@@ -23,6 +23,19 @@
                            Foreground="{Binding Tokens.Text}" />
 
                 <StackPanel Spacing="10">
+                    <TextBlock Text="NOTIFICATIONS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5" />
+
+                    <CheckBox Content="Notify me when Claude is done or is asking a question"
+                              IsChecked="{Binding NotificationsEnabled, Mode=TwoWay}"
+                              Foreground="{Binding Tokens.Text}" FontSize="12.5" />
+
+                    <TextBlock Text="System notifications fire only when Conclave isn't focused."
+                               FontSize="11" Foreground="{Binding Tokens.TextMute}"
+                               TextWrapping="Wrap" Margin="24,0,0,0" />
+                </StackPanel>
+
+                <StackPanel Spacing="10">
                     <TextBlock Text="AUTO-CLEANUP" FontSize="11" FontWeight="SemiBold"
                                Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5" />
 

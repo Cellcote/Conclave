@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private SessionManager? _manager;
     private AutoCleanupService? _autoCleanup;
     private ShellVm? _shell;
+    private bool _isWindowActive = true;
 
     private double _savedRightPanelWidth = 320;
 
@@ -42,6 +43,15 @@ public partial class MainWindow : Window
         var tokens = Tokens.DarkCoolNormalMedium();
         _manager = SessionManager.Open(tokens);
 
+        // Native OS notifications for "claude is done" / "claude is asking a question".
+        // We suppress while the window is active — the user already has eyes on it.
+        var notifications = new NotificationService
+        {
+            Enabled = SettingsKeys.ReadNotificationsEnabled(_manager.Db),
+            IsWindowActive = () => _isWindowActive,
+        };
+        _manager.Notifications = notifications;
+
         var claudeService = new ClaudeService(_manager);
         var capabilities = ClaudeCapabilities.Detect();
         _shell = new ShellVm(tokens, _manager, capabilities);
@@ -53,6 +63,9 @@ public partial class MainWindow : Window
         _autoCleanup.Start();
 
         DataContext = _shell;
+
+        Activated += (_, _) => _isWindowActive = true;
+        Deactivated += (_, _) => _isWindowActive = false;
 
         SizeChanged += (_, e) => ApplyResponsiveLayout(e.NewSize.Width, _shell?.HasActiveSession ?? false);
         Closing += (_, _) =>
