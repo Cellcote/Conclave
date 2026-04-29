@@ -52,7 +52,9 @@ public sealed class ClaudeService
 
         // Live assistant messages built from stream_event deltas, keyed by claude's message id.
         // The final `assistant` event is still authoritative; we reuse the live VM on match.
-        var liveByMessageId = new Dictionary<string, TranscriptMessageVm>();
+        // Each entry carries a StringBuilder so a long response with hundreds of small text
+        // deltas doesn't quadratically copy the growing message via `live.Content += ...`.
+        var liveByMessageId = new Dictionary<string, LiveAssistantState>();
 
         // Capture once at turn start — any clear that happens mid-stream (or the next turn's
         // clear) should not affect this in-flight invocation's args.
@@ -118,12 +120,23 @@ public sealed class ClaudeService
             TimestampUtc = DateTime.UtcNow,
         });
 
+    // Per-live-message scratch state. Buffer accumulates text_delta payloads cheaply;
+    // VM.Content is only refreshed periodically (see HandleStreamDelta) so a long response
+    // with thousands of deltas doesn't allocate a full new string per delta.
+    private sealed class LiveAssistantState
+    {
+        public TranscriptMessageVm Vm { get; }
+        public StringBuilder Buffer { get; } = new();
+        public DateTime LastFlushUtc;
+        public LiveAssistantState(TranscriptMessageVm vm) => Vm = vm;
+    }
+
     private void Handle(
         SessionVm session,
         StreamJsonEvent ev,
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
-        Dictionary<string, TranscriptMessageVm> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId)
     {
         switch (ev)
         {
@@ -191,10 +204,15 @@ public sealed class ClaudeService
         }
     }
 
+    // Min interval between Content flushes for a streaming assistant message. ~30Hz feels
+    // smooth for streaming text but spares us a full-string ToString allocation per delta —
+    // for long responses (hundreds–thousands of small deltas) that adds up.
+    private static readonly TimeSpan ContentFlushInterval = TimeSpan.FromMilliseconds(33);
+
     private void HandleStreamDelta(
         SessionVm session,
         StreamDeltaEvent delta,
-        Dictionary<string, TranscriptMessageVm> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId)
     {
         switch (delta.EventType)
         {
@@ -214,7 +232,7 @@ public sealed class ClaudeService
                         Time = Now(),
                     };
                     session.AppendTranscript(live);
-                    liveByMessageId[delta.MessageId] = live;
+                    liveByMessageId[delta.MessageId] = new LiveAssistantState(live);
                 }
                 break;
 
@@ -223,13 +241,37 @@ public sealed class ClaudeService
                 // partial JSON and we'd rather wait for the final assistant event for those.
                 if (delta.DeltaType == "text_delta" && !string.IsNullOrEmpty(delta.DeltaText))
                 {
-                    var live = liveByMessageId.Values.LastOrDefault();
-                    if (live is not null) live.Content += delta.DeltaText;
+                    var state = liveByMessageId.Values.LastOrDefault();
+                    if (state is not null)
+                    {
+                        state.Buffer.Append(delta.DeltaText);
+                        var now = DateTime.UtcNow;
+                        if (now - state.LastFlushUtc >= ContentFlushInterval)
+                        {
+                            state.Vm.Content = state.Buffer.ToString();
+                            state.LastFlushUtc = now;
+                        }
+                    }
                 }
                 break;
 
-            // content_block_start / stop / message_delta / message_stop: no-op. The final
-            // `assistant` event carries authoritative state.
+            case "content_block_stop":
+                // Flush any pending text accumulated since the last throttled update so the
+                // bubble shows the full block before the next one starts (or the AssistantEvent
+                // overwrites with the authoritative content). Unconditionally assign — the
+                // Set guard in Observable filters no-op writes when content matches.
+                {
+                    var state = liveByMessageId.Values.LastOrDefault();
+                    if (state is not null && state.Buffer.Length > 0)
+                    {
+                        state.Vm.Content = state.Buffer.ToString();
+                        state.LastFlushUtc = DateTime.UtcNow;
+                    }
+                }
+                break;
+
+            // message_delta / message_stop: no-op. The final `assistant` event carries
+            // authoritative state.
         }
     }
 
@@ -247,7 +289,7 @@ public sealed class ClaudeService
         AssistantEvent asst,
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
-        Dictionary<string, TranscriptMessageVm> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId)
     {
         var buf = new StringBuilder();
 
@@ -255,10 +297,10 @@ public sealed class ClaudeService
         // it as the target (avoid duplicating a row). Otherwise create fresh.
         TranscriptMessageVm message;
         bool isLiveMessage = !string.IsNullOrEmpty(asst.MessageId)
-            && liveByMessageId.TryGetValue(asst.MessageId, out var liveRef);
+            && liveByMessageId.ContainsKey(asst.MessageId);
         if (isLiveMessage)
         {
-            message = liveByMessageId[asst.MessageId];
+            message = liveByMessageId[asst.MessageId].Vm;
             liveByMessageId.Remove(asst.MessageId);
         }
         else
