@@ -70,13 +70,15 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ProjectVm">
                             <StackPanel Margin="0,6,0,0" IsVisible="{Binding IsVisibleInTree}">
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="10,6">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="10,6"
+                                      Background="Transparent" Cursor="Hand"
+                                      PointerPressed="OnProjectHeaderPressed">
                                     <Grid.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Rename" Click="OnRenameProjectMenu" />
                                         </ContextMenu>
                                     </Grid.ContextMenu>
-                                    <TextBlock Text="▾" FontSize="9"
+                                    <TextBlock Text="{Binding ChevronGlyph}" FontSize="9"
                                                Foreground="{Binding Tokens.TextDim}"
                                                VerticalAlignment="Center" Margin="0,0,8,0" />
                                     <TextBlock Grid.Column="1" Text="{Binding Name}"
@@ -102,7 +104,8 @@
                                                    VerticalAlignment="Center" />
                                     </Border>
                                 </Grid>
-                                <ItemsControl ItemsSource="{Binding Sessions}">
+                                <ItemsControl ItemsSource="{Binding Sessions}"
+                                              IsVisible="{Binding IsExpanded}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:SessionVm">
                                             <Border Margin="0,1" Padding="10,7,10,7"

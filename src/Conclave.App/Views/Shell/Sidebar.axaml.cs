@@ -136,6 +136,15 @@ public partial class Sidebar : UserControl
         }
     }
 
+    private void OnProjectHeaderPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control c && c.DataContext is ProjectVm p && !p.IsEditing)
+        {
+            p.IsExpanded = !p.IsExpanded;
+            e.Handled = true;
+        }
+    }
+
     // --- Project rename ---
 
     private void OnProjectNameDoubleTapped(object? sender, TappedEventArgs e)
