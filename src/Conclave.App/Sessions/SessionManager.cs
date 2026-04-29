@@ -869,24 +869,24 @@ public sealed class SessionManager : IDisposable
     public void DeleteSession(SessionVm s, bool skipRemovalFromParent = false)
     {
         var project = FindProjectOf(s);
-        var projectRecord = project is null ? null : _db.GetProject(project.Id);
-        if (projectRecord is not null)
+        // Dispatch on the VM's IsFusion (not the DB row's Kind) so the fusion cleanup path
+        // still runs when the parent project row is gone — that's the whole reason RepoPath
+        // is snapshotted on the session_worktrees row.
+        if (project?.IsFusion == true)
         {
-            if (projectRecord.Kind == ProjectKinds.Fusion)
+            // Remove every member's worktree using the repo path snapshotted on the row.
+            // Look up the rows before DeleteSession cascades them away.
+            foreach (var row in _db.GetSessionWorktrees(s.Id))
             {
-                // Remove every member's worktree using the repo path snapshotted on the row.
-                // We deliberately don't look up the member project record — if it was deleted
-                // the row's RepoPath is still valid, so the cleanup still runs and the
-                // worktree on disk doesn't leak. Look up the rows before DeleteSession
-                // cascades them away.
-                foreach (var row in _db.GetSessionWorktrees(s.Id))
-                {
-                    if (string.IsNullOrEmpty(row.RepoPath)) continue;
-                    try { WorktreeService.RemoveWorktree(row.RepoPath, row.WorktreePath, row.BranchName); }
-                    catch { /* best-effort */ }
-                }
+                if (string.IsNullOrEmpty(row.RepoPath)) continue;
+                try { WorktreeService.RemoveWorktree(row.RepoPath, row.WorktreePath, row.BranchName); }
+                catch { /* best-effort */ }
             }
-            else
+        }
+        else
+        {
+            var projectRecord = project is null ? null : _db.GetProject(project.Id);
+            if (projectRecord is not null)
             {
                 try { WorktreeService.RemoveWorktree(projectRecord.Path, s.Worktree, s.Branch); }
                 catch { /* best-effort */ }
