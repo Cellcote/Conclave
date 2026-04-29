@@ -19,6 +19,8 @@ class Program
             return SmokeWorktree.Run();
         if (args.Length > 0 && args[0] == "--smoke-claude")
             return SmokeClaude.RunAsync().GetAwaiter().GetResult();
+        if (args.Length > 0 && args[0] == "--smoke-fusion")
+            return SmokeFusion.Run();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         return 0;
     }

@@ -92,6 +92,8 @@ public sealed class NewSessionVm : Views.Observable
         {
             if (_project is null || string.IsNullOrWhiteSpace(_branch)) return "—";
             var slug = DeriveSlug(_branch);
+            if (_project.IsFusion)
+                return $"{_project.MemberIds.Count} worktrees · {slug}";
             return $"worktrees/{_project.Id[..8]}/{slug}";
         }
     }

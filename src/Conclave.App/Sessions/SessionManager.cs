@@ -57,8 +57,12 @@ public sealed class SessionManager : IDisposable
             Id = p.Id,
             Path = p.Path,
             DefaultBranch = p.DefaultBranch,
+            Kind = p.Kind,
         };
         vm.Name = p.Name;
+        if (p.Kind == ProjectKinds.Fusion)
+            foreach (var m in _db.GetMembers(p.Id))
+                vm.MemberIds.Add(m.MemberId);
         return vm;
     }
 
@@ -74,6 +78,15 @@ public sealed class SessionManager : IDisposable
             _db.UpdateSessionStatus(s.Id, loadedStatus.ToString());
         }
 
+        // Fusion sessions: load secondary worktree paths so claude can be spawned with --add-dir
+        // for each. Ordinal 0 == primary == s.WorktreePath, so skip it. Empty list for repo
+        // sessions (which have no session_worktrees rows).
+        var fusionDirs = _db.GetSessionWorktrees(s.Id);
+        var additionalDirs = fusionDirs.Count > 0
+            ? (IReadOnlyList<string>)fusionDirs.Where(w => w.Ordinal > 0)
+                .Select(w => w.WorktreePath).ToList()
+            : Array.Empty<string>();
+
         var vm = new SessionVm(_tokens)
         {
             Id = s.Id,
@@ -81,6 +94,7 @@ public sealed class SessionManager : IDisposable
             Branch = s.BranchName,
             BaseBranch = s.BaseBranch,
             Model = s.Model,
+            AdditionalDirs = additionalDirs,
             StartedUtc = s.StartedUtc is { } t
                 ? DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime
                 : DateTime.UtcNow,
@@ -420,8 +434,45 @@ public sealed class SessionManager : IDisposable
             Name: name,
             Path: path,
             DefaultBranch: defaultBranch,
-            CreatedAt: Database.Now());
+            CreatedAt: Database.Now(),
+            Kind: ProjectKinds.Repo);
         _db.InsertProject(p);
+        var vm = BuildProjectVm(p);
+        Projects.Add(vm);
+        return vm;
+    }
+
+    // Composes a fusion project from existing repo-kind projects. The primary's worktree is
+    // the cwd for sessions; secondaries are passed to claude via --add-dir. Members must all
+    // be Kind = "repo"; nested fusions are not supported.
+    public ProjectVm CreateFusionProject(string name, ProjectVm primary, IReadOnlyList<ProjectVm> secondaries)
+    {
+        if (primary.Kind != ProjectKinds.Repo)
+            throw new InvalidOperationException("primary must be a repo project");
+        if (secondaries.Count == 0)
+            throw new InvalidOperationException("a fusion project needs at least one secondary repo");
+        foreach (var sec in secondaries)
+        {
+            if (sec.Kind != ProjectKinds.Repo)
+                throw new InvalidOperationException($"member '{sec.Name}' is not a repo project");
+            if (sec.Id == primary.Id)
+                throw new InvalidOperationException("primary and secondary must differ");
+        }
+        if (secondaries.Select(s => s.Id).Distinct().Count() != secondaries.Count)
+            throw new InvalidOperationException("duplicate secondary repos");
+
+        var p = new Project(
+            Id: Guid.NewGuid().ToString("N"),
+            Name: name,
+            Path: "",
+            DefaultBranch: "",
+            CreatedAt: Database.Now(),
+            Kind: ProjectKinds.Fusion);
+        _db.InsertProject(p);
+        _db.InsertMember(new ProjectMember(p.Id, primary.Id, 0));
+        for (int i = 0; i < secondaries.Count; i++)
+            _db.InsertMember(new ProjectMember(p.Id, secondaries[i].Id, i + 1));
+
         var vm = BuildProjectVm(p);
         Projects.Add(vm);
         return vm;
@@ -469,6 +520,15 @@ public sealed class SessionManager : IDisposable
             branch = $"conclave/{slug}";
         }
 
+        return projectRecord.Kind == ProjectKinds.Fusion
+            ? CreateFusionSession(project, projectRecord, branch, slug, display, model, permissionMode)
+            : CreateRepoSession(project, projectRecord, branch, slug, display, model, permissionMode);
+    }
+
+    private SessionVm CreateRepoSession(
+        ProjectVm project, Project projectRecord, string branch, string slug,
+        string display, string model, string permissionMode)
+    {
         var wtPath = Path.Combine(_worktreeRoot, project.Id, slug);
         WorktreeService.AddWorktree(projectRecord.Path, wtPath, branch, projectRecord.DefaultBranch);
 
@@ -494,6 +554,70 @@ public sealed class SessionManager : IDisposable
         return vm;
     }
 
+    private SessionVm CreateFusionSession(
+        ProjectVm project, Project projectRecord, string branch, string slug,
+        string display, string model, string permissionMode)
+    {
+        // Resolve members in ordinal order. Ordinal 0 == primary (whose worktree is cwd).
+        var members = _db.GetMembers(project.Id);
+        if (members.Count < 2)
+            throw new InvalidOperationException(
+                "fusion project has fewer than 2 active member repos — cannot start a session");
+
+        var memberRecords = new List<Project>(members.Count);
+        foreach (var m in members)
+        {
+            var rec = _db.GetProject(m.MemberId)
+                ?? throw new InvalidOperationException($"fusion member {m.MemberId} no longer exists");
+            memberRecords.Add(rec);
+        }
+
+        // worktrees/<fusion_id>/<slug>/<member_id[..8]>. Same branch name in every repo, each
+        // based off its own DefaultBranch. The fusion add helper rolls back partial successes.
+        var fusionRoot = Path.Combine(_worktreeRoot, project.Id, slug);
+        var specs = memberRecords
+            .Select(r => new WorktreeService.FusionAddSpec(
+                r.Path, Path.Combine(fusionRoot, r.Id[..8]), branch, r.DefaultBranch))
+            .ToList();
+        WorktreeService.AddWorktreesForFusion(specs);
+
+        // Primary's worktree path/base_branch hydrate the sessions row; other members live in
+        // session_worktrees. The primary is also recorded in session_worktrees (ordinal 0)
+        // so callers can iterate uniformly without special-casing it.
+        var primaryWt = specs[0].WorktreePath;
+        var now = Database.Now();
+        var s = new Session
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ProjectId = project.Id,
+            Name = display,
+            BranchName = branch,
+            WorktreePath = primaryWt,
+            BaseBranch = memberRecords[0].DefaultBranch,
+            Model = model,
+            Status = SessionStatus.Idle.ToString(),
+            PermissionMode = permissionMode,
+            CreatedAt = now,
+            LastActiveAt = now,
+        };
+        _db.InsertSession(s);
+        for (int i = 0; i < specs.Count; i++)
+        {
+            _db.InsertSessionWorktree(new SessionWorktree(
+                SessionId: s.Id,
+                MemberProjectId: memberRecords[i].Id,
+                RepoPath: memberRecords[i].Path,
+                WorktreePath: specs[i].WorktreePath,
+                BranchName: branch,
+                BaseBranch: memberRecords[i].DefaultBranch,
+                Ordinal: i));
+        }
+
+        var vm = BuildSessionVm(s);
+        project.Sessions.Insert(0, vm);
+        return vm;
+    }
+
     // Fork: spawn a new session that branches off the source's current state. The new
     // worktree starts at the source's HEAD with its uncommitted tracked changes carried over
     // (untracked files are skipped — v1 limitation). The transcript is copied wholesale so
@@ -510,9 +634,22 @@ public sealed class SessionManager : IDisposable
         var forkSuffix = Guid.NewGuid().ToString("N")[..6];
         var slug = $"{sourceSlug}-fork-{forkSuffix}";
         var branch = $"conclave/{slug}";
-        var wtPath = Path.Combine(_worktreeRoot, project.Id, slug);
 
-        WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, wtPath, branch);
+        string primaryWt;
+        string baseBranch;
+        IReadOnlyList<SessionWorktree>? forkedFusionRows = null;
+
+        if (projectRecord.Kind == ProjectKinds.Fusion)
+        {
+            (primaryWt, baseBranch, forkedFusionRows) =
+                ForkFusionWorktrees(project, source, slug, branch);
+        }
+        else
+        {
+            primaryWt = Path.Combine(_worktreeRoot, project.Id, slug);
+            WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, primaryWt, branch);
+            baseBranch = source.BaseBranch;
+        }
 
         var now = Database.Now();
         var s = new Session
@@ -521,8 +658,8 @@ public sealed class SessionManager : IDisposable
             ProjectId = project.Id,
             Name = $"Fork of {source.Title}",
             BranchName = branch,
-            WorktreePath = wtPath,
-            BaseBranch = source.BaseBranch,
+            WorktreePath = primaryWt,
+            BaseBranch = baseBranch,
             Model = source.Model,
             Status = SessionStatus.Idle.ToString(),
             PermissionMode = source.PermissionMode,
@@ -530,6 +667,10 @@ public sealed class SessionManager : IDisposable
             LastActiveAt = now,
         };
         _db.InsertSession(s);
+
+        if (forkedFusionRows is not null)
+            foreach (var row in forkedFusionRows)
+                _db.InsertSessionWorktree(row with { SessionId = s.Id });
 
         foreach (var row in _db.GetMessages(source.Id))
         {
@@ -553,6 +694,47 @@ public sealed class SessionManager : IDisposable
         if (idx < 0) project.Sessions.Insert(0, vm);
         else project.Sessions.Insert(idx + 1, vm);
         return vm;
+    }
+
+    // Forks a fusion session's worktrees in lockstep across every member repo. Returns the
+    // primary's new worktree path, the primary's base branch, and the list of session_worktrees
+    // rows the caller should persist after inserting the new session row. The session_id field
+    // on the returned rows is empty — callers fill it in.
+    private (string PrimaryWt, string BaseBranch, IReadOnlyList<SessionWorktree> Rows)
+        ForkFusionWorktrees(ProjectVm project, SessionVm source, string slug, string branch)
+    {
+        var sourceRows = _db.GetSessionWorktrees(source.Id);
+        if (sourceRows.Count < 2)
+            throw new InvalidOperationException(
+                "fusion session is missing per-member worktree rows — cannot fork");
+
+        var fusionRoot = Path.Combine(_worktreeRoot, project.Id, slug);
+        var specs = new List<WorktreeService.FusionForkSpec>(sourceRows.Count);
+        var newRows = new List<SessionWorktree>(sourceRows.Count);
+        foreach (var row in sourceRows)
+        {
+            // RepoPath is snapshotted on the source row so we can fork even if the underlying
+            // member project record was deleted. If repo_path is empty (a row predates the
+            // backfill) fall back to looking it up.
+            var repoPath = !string.IsNullOrEmpty(row.RepoPath)
+                ? row.RepoPath
+                : _db.GetProject(row.MemberProjectId)?.Path
+                  ?? throw new InvalidOperationException(
+                      $"fusion member {row.MemberProjectId} has no recorded repo path and is no longer registered");
+            var newWt = Path.Combine(fusionRoot, row.MemberProjectId[..8]);
+            specs.Add(new WorktreeService.FusionForkSpec(
+                repoPath, row.WorktreePath, newWt, branch));
+            newRows.Add(new SessionWorktree(
+                SessionId: "",
+                MemberProjectId: row.MemberProjectId,
+                RepoPath: repoPath,
+                WorktreePath: newWt,
+                BranchName: branch,
+                BaseBranch: row.BaseBranch,
+                Ordinal: row.Ordinal));
+        }
+        WorktreeService.ForkWorktreesForFusion(specs);
+        return (specs[0].NewWorktreePath, sourceRows[0].BaseBranch, newRows);
     }
 
     // Fork at a specific message: same shape as ForkSession, but the new session's transcript
@@ -585,9 +767,22 @@ public sealed class SessionManager : IDisposable
         var forkSuffix = Guid.NewGuid().ToString("N")[..6];
         var slug = $"{sourceSlug}-fork-{forkSuffix}";
         var branch = $"conclave/{slug}";
-        var wtPath = Path.Combine(_worktreeRoot, project.Id, slug);
 
-        WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, wtPath, branch);
+        string primaryWt;
+        string baseBranch;
+        IReadOnlyList<SessionWorktree>? forkedFusionRows = null;
+
+        if (projectRecord.Kind == ProjectKinds.Fusion)
+        {
+            (primaryWt, baseBranch, forkedFusionRows) =
+                ForkFusionWorktrees(project, source, slug, branch);
+        }
+        else
+        {
+            primaryWt = Path.Combine(_worktreeRoot, project.Id, slug);
+            WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, primaryWt, branch);
+            baseBranch = source.BaseBranch;
+        }
 
         var preamble = BuildForkPreamble(keep);
 
@@ -598,8 +793,8 @@ public sealed class SessionManager : IDisposable
             ProjectId = project.Id,
             Name = $"Fork of {source.Title}",
             BranchName = branch,
-            WorktreePath = wtPath,
-            BaseBranch = source.BaseBranch,
+            WorktreePath = primaryWt,
+            BaseBranch = baseBranch,
             Model = source.Model,
             Status = SessionStatus.Idle.ToString(),
             PermissionMode = source.PermissionMode,
@@ -608,6 +803,10 @@ public sealed class SessionManager : IDisposable
             PendingPreamble = preamble,
         };
         _db.InsertSession(s);
+
+        if (forkedFusionRows is not null)
+            foreach (var row in forkedFusionRows)
+                _db.InsertSessionWorktree(row with { SessionId = s.Id });
 
         foreach (var row in keep)
         {
@@ -670,11 +869,28 @@ public sealed class SessionManager : IDisposable
     public void DeleteSession(SessionVm s, bool skipRemovalFromParent = false)
     {
         var project = FindProjectOf(s);
-        var projectRecord = project is null ? null : _db.GetProject(project.Id);
-        if (projectRecord is not null)
+        // Dispatch on the VM's IsFusion (not the DB row's Kind) so the fusion cleanup path
+        // still runs when the parent project row is gone — that's the whole reason RepoPath
+        // is snapshotted on the session_worktrees row.
+        if (project?.IsFusion == true)
         {
-            try { WorktreeService.RemoveWorktree(projectRecord.Path, s.Worktree, s.Branch); }
-            catch { /* best-effort */ }
+            // Remove every member's worktree using the repo path snapshotted on the row.
+            // Look up the rows before DeleteSession cascades them away.
+            foreach (var row in _db.GetSessionWorktrees(s.Id))
+            {
+                if (string.IsNullOrEmpty(row.RepoPath)) continue;
+                try { WorktreeService.RemoveWorktree(row.RepoPath, row.WorktreePath, row.BranchName); }
+                catch { /* best-effort */ }
+            }
+        }
+        else
+        {
+            var projectRecord = project is null ? null : _db.GetProject(project.Id);
+            if (projectRecord is not null)
+            {
+                try { WorktreeService.RemoveWorktree(projectRecord.Path, s.Worktree, s.Branch); }
+                catch { /* best-effort */ }
+            }
         }
         _db.DeleteSession(s.Id);
         if (!skipRemovalFromParent && project is not null) project.Sessions.Remove(s);

@@ -75,6 +75,11 @@ public partial class NewSessionModal : UserControl
         }
     }
 
+    private void OnNewFusion(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ShellVm shell) shell.OpenNewFusionProject();
+    }
+
     private void OnPickHaiku(object? sender, PointerPressedEventArgs e) => Pick("Haiku 4.5");
     private void OnPickSonnet(object? sender, PointerPressedEventArgs e) => Pick("Sonnet 4.5");
     private void OnPickOpus(object? sender, PointerPressedEventArgs e) => Pick("Opus 4");

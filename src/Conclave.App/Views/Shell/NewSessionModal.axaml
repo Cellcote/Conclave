@@ -46,11 +46,18 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <Button Content="+ Add project…" Click="OnAddProject"
-                            Margin="0,6,0,0" HorizontalAlignment="Left"
-                            Background="Transparent" BorderThickness="0"
-                            Foreground="{Binding Tokens.TextDim}" FontSize="11.5"
-                            Padding="0" />
+                    <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,6,0,0">
+                        <Button Content="+ Add project…" Click="OnAddProject"
+                                HorizontalAlignment="Left"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{Binding Tokens.TextDim}" FontSize="11.5"
+                                Padding="0" />
+                        <Button Content="+ New fusion project…" Click="OnNewFusion"
+                                HorizontalAlignment="Left"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{Binding Tokens.TextDim}" FontSize="11.5"
+                                Padding="0" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Branch -->

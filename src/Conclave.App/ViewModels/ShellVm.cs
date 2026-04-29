@@ -99,6 +99,23 @@ public sealed class ShellVm : Views.Observable
     public void OpenNewSessionForProject(ProjectVm project) => NewSession = new NewSessionVm(Tokens, Projects) { Project = project };
     public void CancelNewSession() => NewSession = null;
 
+    private NewFusionProjectVm? _newFusion;
+    public NewFusionProjectVm? NewFusion
+    {
+        get => _newFusion;
+        set { if (Set(ref _newFusion, value)) Notify(nameof(IsNewFusionOpen)); }
+    }
+    public bool IsNewFusionOpen => _newFusion is not null;
+
+    // Opens the fusion-creation modal. The new-session modal closes first because the fusion
+    // modal reopens it on success with the new fusion preselected.
+    public void OpenNewFusionProject()
+    {
+        NewSession = null;
+        NewFusion = new NewFusionProjectVm(Tokens, Projects);
+    }
+    public void CancelNewFusionProject() => NewFusion = null;
+
     // --- Preferences ---
 
     public AutoCleanupService? AutoCleanup { get; set; }
