@@ -332,6 +332,8 @@ public sealed class ShellVm : Views.Observable
     {
         var selected = Filters.FirstOrDefault(f => f.IsSelected);
         var query = _searchQuery.Trim();
+        bool filterIsActive = !string.IsNullOrEmpty(query) ||
+            (selected is not null && selected.Label != "All sessions");
         foreach (var p in Projects)
         {
             bool anyVisible = false;
@@ -344,6 +346,9 @@ public sealed class ShellVm : Views.Observable
                 if (visible) anyVisible = true;
             }
             p.IsVisibleInTree = anyVisible;
+            // A collapsed project would otherwise hide its matches behind the chevron;
+            // force it open so search/filter results are actually visible.
+            if (filterIsActive && anyVisible) p.IsExpanded = true;
         }
     }
 
