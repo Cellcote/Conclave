@@ -198,6 +198,11 @@ public sealed class ClaudeService
         switch (delta.EventType)
         {
             case "message_start":
+                // Append a live VM to the transcript so deltas stream into a visible bubble,
+                // but do NOT persist yet — at this point Content is empty and Tools are
+                // empty. If the turn is killed mid-stream we'd leave a blank row in the DB
+                // that paints as an empty assistant bubble on reload. The AssistantEvent
+                // path inserts the row once content/tools are real.
                 if (!string.IsNullOrEmpty(delta.MessageId) && !liveByMessageId.ContainsKey(delta.MessageId))
                 {
                     var live = new TranscriptMessageVm
@@ -208,7 +213,6 @@ public sealed class ClaudeService
                         Time = Now(),
                     };
                     session.AppendTranscript(live);
-                    _manager.PersistMessage(session, live);
                     liveByMessageId[delta.MessageId] = live;
                 }
                 break;
@@ -306,17 +310,14 @@ public sealed class ClaudeService
         // text and no tools. Only add the message if it has something to show.
         if (!string.IsNullOrEmpty(message.Content) || message.Tools.Count > 0)
         {
-            if (isLiveMessage)
-            {
-                // Live path: row already inserted on message_start; update it.
-                _manager.UpdateMessageTools(message);
-                _manager.UpdateMessageClaudeUuid(message);
-            }
-            else
+            if (!isLiveMessage)
             {
                 session.AppendTranscript(message);
-                _manager.PersistMessage(session, message);
             }
+            // Insert lazily — message_start no longer persists. The VM is already in the
+            // transcript (live path appended on message_start; fresh path appended just
+            // above), so the only DB operation needed is the insert.
+            _manager.PersistMessage(session, message);
         }
 
         if (hasToolUse)
