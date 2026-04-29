@@ -50,7 +50,7 @@ public sealed class AutoCleanupService : IDisposable
 
     // Public hook for the "Clean up now" button. Runs one tick regardless of the enabled
     // setting since this is a user-initiated action.
-    public Task RunOnceAsync() => TickAsync(respectEnabled: false, _cts.Token);
+    public Task RunOnceAsync() => Task.Run(() => TickAsync(respectEnabled: false, _cts.Token));
 
     private async Task TickAsync(bool respectEnabled, CancellationToken ct)
     {
