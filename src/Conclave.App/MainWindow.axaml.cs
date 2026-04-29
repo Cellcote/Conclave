@@ -17,7 +17,9 @@ public partial class MainWindow : Window
     private SessionManager? _manager;
     private AutoCleanupService? _autoCleanup;
     private ShellVm? _shell;
-    private bool _isWindowActive = true;
+    // Written on the UI thread from Activated/Deactivated, read by NotificationService
+    // from a ClaudeService async continuation — volatile keeps the cross-thread read honest.
+    private volatile bool _isWindowActive = true;
 
     private double _savedRightPanelWidth = 320;
 

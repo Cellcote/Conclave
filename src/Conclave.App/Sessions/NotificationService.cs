@@ -83,12 +83,15 @@ public sealed class NotificationService
             RedirectStandardError = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        try { Process.Start(psi); }
+        try { Process.Start(psi)?.Dispose(); }
         catch { /* helper missing — best-effort */ }
     }
 
+    // AppleScript string literals can't span lines, so any embedded \r/\n would make
+    // osascript reject the -e script with a syntax error. Flatten to spaces.
     private static string EscapeAppleScript(string s) =>
-        s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        s.Replace("\\", "\\\\").Replace("\"", "\\\"")
+         .Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
 
     private static string EscapeXml(string s) =>
         s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
