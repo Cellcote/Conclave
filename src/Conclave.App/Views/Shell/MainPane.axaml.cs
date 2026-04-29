@@ -81,5 +81,17 @@ public partial class MainPane : UserControl
         if (DataContext is ShellVm shell) shell.CancelActiveTurn();
     }
 
+    private void OnForkFromHereMenu(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem mi || mi.DataContext is not TranscriptMessageVm msg
+            || DataContext is not ShellVm shell || shell.ActiveSession is not { } source) return;
+        try
+        {
+            var fork = shell.Manager.ForkSessionAtMessage(source, msg);
+            shell.ActiveSession = fork;
+        }
+        catch (System.Exception ex) { shell.ShowError($"Fork session failed: {ex.Message}"); }
+    }
+
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 }

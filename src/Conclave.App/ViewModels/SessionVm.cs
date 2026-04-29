@@ -45,6 +45,12 @@ public sealed class SessionVm : Views.Observable
     // the copied transcript from disk if needed via tools.
     public string? PendingForkFromClaudeSessionId { get; set; }
 
+    // System-prompt context to inject on the next turn via `--append-system-prompt`. Mirrors
+    // sessions.pending_preamble — populated for fork-at-message sessions, cleared after the
+    // first turn that consumes it.
+    private string? _pendingPreamble;
+    public string? PendingPreamble { get => _pendingPreamble; set => Set(ref _pendingPreamble, value); }
+
     private string _title = "";
     public string Title { get => _title; set => Set(ref _title, value); }
 

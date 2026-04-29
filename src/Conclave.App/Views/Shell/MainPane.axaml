@@ -109,6 +109,11 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TranscriptMessageVm">
                         <StackPanel>
+                            <StackPanel.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Fork from here" Click="OnForkFromHereMenu" />
+                                </ContextMenu>
+                            </StackPanel.ContextMenu>
                             <!-- Header row (hidden on consecutive same-role messages) -->
                             <StackPanel Orientation="Horizontal" Spacing="6"
                                         Margin="0,22,0,8"

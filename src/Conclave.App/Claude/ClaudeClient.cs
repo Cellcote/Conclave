@@ -16,6 +16,7 @@ public sealed class ClaudeClient
         string? permissionMode = null,
         bool includePartialMessages = true,
         string? forkFromSessionId = null,
+        string? appendSystemPrompt = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo("claude")
@@ -44,6 +45,11 @@ public sealed class ClaudeClient
         {
             psi.ArgumentList.Add("--permission-mode");
             psi.ArgumentList.Add(permissionMode);
+        }
+        if (!string.IsNullOrEmpty(appendSystemPrompt))
+        {
+            psi.ArgumentList.Add("--append-system-prompt");
+            psi.ArgumentList.Add(appendSystemPrompt);
         }
         // Resume target: prefer a fork-from id (first turn of a freshly forked session) over
         // the regular resume id, since a forked session won't have its own ClaudeSessionId

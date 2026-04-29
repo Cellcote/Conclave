@@ -78,6 +78,10 @@ public sealed class Database : IDisposable
               value TEXT NOT NULL
             );
             """),
+        (9, """
+            ALTER TABLE messages ADD COLUMN claude_uuid TEXT;
+            ALTER TABLE sessions ADD COLUMN pending_preamble TEXT;
+            """),
     };
 
     // Explicit column lists so ordinal mapping in Read*() stays stable.
@@ -86,9 +90,10 @@ public sealed class Database : IDisposable
         "id, project_id, name, branch_name, worktree_path, created_at, last_active_at, " +
         "base_branch, model, started_utc, status, unread_count, " +
         "pr_number, pr_state, diff_files, diff_add, diff_del, " +
-        "claude_session_id, plan_json, permission_mode, total_cost_usd, pr_merged_at";
+        "claude_session_id, plan_json, permission_mode, total_cost_usd, pr_merged_at, " +
+        "pending_preamble";
     private const string MessageColumns =
-        "id, session_id, role, content, tools_json, created_at, seq";
+        "id, session_id, role, content, tools_json, created_at, seq, claude_uuid";
 
     private Database(SqliteConnection conn) => _conn = conn;
 
@@ -271,6 +276,7 @@ public sealed class Database : IDisposable
         PermissionMode = r.GetString(19),
         TotalCostUsd = r.GetDouble(20),
         PrMergedAt = NullableLong(r, 21),
+        PendingPreamble = Str(r, 22),
     };
 
     public void InsertSession(Session s) => Exec(
@@ -280,13 +286,15 @@ public sealed class Database : IDisposable
           base_branch, model, started_utc, status, unread_count,
           pr_number, pr_state, pr_merged_at, diff_files, diff_add, diff_del,
           created_at, last_active_at,
-          claude_session_id, plan_json, permission_mode, total_cost_usd)
+          claude_session_id, plan_json, permission_mode, total_cost_usd,
+          pending_preamble)
         VALUES (
           $id, $projectId, $name, $branchName, $worktreePath,
           $baseBranch, $model, $startedUtc, $status, $unreadCount,
           $prNumber, $prState, $prMergedAt, $diffFiles, $diffAdd, $diffDel,
           $createdAt, $lastActiveAt,
-          $claudeSessionId, $planJson, $permissionMode, $totalCostUsd);
+          $claudeSessionId, $planJson, $permissionMode, $totalCostUsd,
+          $pendingPreamble);
         """,
         ("$id", s.Id), ("$projectId", s.ProjectId), ("$name", s.Name),
         ("$branchName", s.BranchName), ("$worktreePath", s.WorktreePath),
@@ -300,7 +308,8 @@ public sealed class Database : IDisposable
         ("$claudeSessionId", (object?)s.ClaudeSessionId),
         ("$planJson", (object?)s.PlanJson),
         ("$permissionMode", s.PermissionMode),
-        ("$totalCostUsd", s.TotalCostUsd));
+        ("$totalCostUsd", s.TotalCostUsd),
+        ("$pendingPreamble", (object?)s.PendingPreamble));
 
     // Status-only update. last_active_at is bumped separately via TouchSession when a turn
     // ends, so intermediate transitions (Working/RunningTool) don't reorder the sidebar.
@@ -337,6 +346,10 @@ public sealed class Database : IDisposable
         "UPDATE sessions SET total_cost_usd = total_cost_usd + $delta WHERE id = $id;",
         ("$id", id), ("$delta", delta));
 
+    public void UpdateSessionPendingPreamble(string id, string? preamble) => Exec(
+        "UPDATE sessions SET pending_preamble = $p WHERE id = $id;",
+        ("$id", id), ("$p", (object?)preamble));
+
     public void UpdateSessionName(string id, string name) => Exec(
         "UPDATE sessions SET name = $name WHERE id = $id;",
         ("$id", id), ("$name", name));
@@ -370,6 +383,7 @@ public sealed class Database : IDisposable
         ToolsJson = Str(r, 4),
         CreatedAt = r.GetInt64(5),
         Seq = r.GetInt32(6),
+        ClaudeUuid = Str(r, 7),
     };
 
     public int NextSeq(string sessionId)
@@ -383,11 +397,16 @@ public sealed class Database : IDisposable
     }
 
     public void InsertMessage(MessageRow m) => Exec(
-        "INSERT INTO messages (id, session_id, role, content, tools_json, created_at, seq) " +
-        "VALUES ($id, $sessionId, $role, $content, $toolsJson, $createdAt, $seq);",
+        "INSERT INTO messages (id, session_id, role, content, tools_json, created_at, seq, claude_uuid) " +
+        "VALUES ($id, $sessionId, $role, $content, $toolsJson, $createdAt, $seq, $claudeUuid);",
         ("$id", m.Id), ("$sessionId", m.SessionId), ("$role", m.Role),
         ("$content", m.Content), ("$toolsJson", (object?)m.ToolsJson),
-        ("$createdAt", m.CreatedAt), ("$seq", m.Seq));
+        ("$createdAt", m.CreatedAt), ("$seq", m.Seq),
+        ("$claudeUuid", (object?)m.ClaudeUuid));
+
+    public void UpdateMessageClaudeUuid(string id, string? uuid) => Exec(
+        "UPDATE messages SET claude_uuid = $u WHERE id = $id;",
+        ("$id", id), ("$u", (object?)uuid));
 
     public void UpdateMessage(string id, string content, string? toolsJson) => Exec(
         "UPDATE messages SET content = $content, tools_json = $toolsJson WHERE id = $id;",

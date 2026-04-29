@@ -30,4 +30,9 @@ public sealed record Session
     public string PermissionMode { get; init; } = "default";
     // Running total of TotalCostUsd accumulated across every result event for this session.
     public double TotalCostUsd { get; init; }
+    // System-prompt context to inject on the next turn via `--append-system-prompt`. Set on
+    // sessions forked at a non-tail message so the model has the prior conversation as
+    // context (it can't be `--resume`-d into the source's claude session at a specific
+    // message). Cleared after the first successful turn that consumes it.
+    public string? PendingPreamble { get; init; }
 }
