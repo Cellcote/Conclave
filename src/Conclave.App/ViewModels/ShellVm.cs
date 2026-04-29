@@ -153,6 +153,20 @@ public sealed class ShellVm : Views.Observable
         }
     }
 
+    public bool NotificationsEnabled
+    {
+        get => SettingsKeys.ReadNotificationsEnabled(Manager.Db);
+        set
+        {
+            if (value == NotificationsEnabled) return;
+            Manager.Db.SetSetting(SettingsKeys.NotificationsEnabled, value ? "true" : "false");
+            // Push the new value into the running service so the next event respects it
+            // without requiring a restart.
+            if (Manager.Notifications is { } svc) svc.Enabled = value;
+            Notify();
+        }
+    }
+
     public async Task RunCleanupNowAsync()
     {
         if (AutoCleanup is null) return;
