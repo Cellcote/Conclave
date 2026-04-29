@@ -26,9 +26,14 @@ public sealed record ProjectMember(
 
 // One row per member repo for a fusion session. Empty for non-fusion sessions, where the
 // session's WorktreePath/BranchName/BaseBranch on the sessions row is sufficient.
+//
+// RepoPath is a snapshot of the member project's path at session-creation time. We store it
+// here (rather than looking it up via MemberProjectId) so DeleteSession can still find and
+// remove the worktree on disk after the member project record has been deleted.
 public sealed record SessionWorktree(
     string SessionId,
     string MemberProjectId,
+    string RepoPath,
     string WorktreePath,
     string BranchName,
     string BaseBranch,

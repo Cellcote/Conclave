@@ -78,6 +78,15 @@ public sealed class SessionManager : IDisposable
             _db.UpdateSessionStatus(s.Id, loadedStatus.ToString());
         }
 
+        // Fusion sessions: load secondary worktree paths so claude can be spawned with --add-dir
+        // for each. Ordinal 0 == primary == s.WorktreePath, so skip it. Empty list for repo
+        // sessions (which have no session_worktrees rows).
+        var fusionDirs = _db.GetSessionWorktrees(s.Id);
+        var additionalDirs = fusionDirs.Count > 0
+            ? (IReadOnlyList<string>)fusionDirs.Where(w => w.Ordinal > 0)
+                .Select(w => w.WorktreePath).ToList()
+            : Array.Empty<string>();
+
         var vm = new SessionVm(_tokens)
         {
             Id = s.Id,
@@ -85,6 +94,7 @@ public sealed class SessionManager : IDisposable
             Branch = s.BranchName,
             BaseBranch = s.BaseBranch,
             Model = s.Model,
+            AdditionalDirs = additionalDirs,
             StartedUtc = s.StartedUtc is { } t
                 ? DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime
                 : DateTime.UtcNow,
@@ -98,13 +108,6 @@ public sealed class SessionManager : IDisposable
         vm.PermissionMode = string.IsNullOrEmpty(s.PermissionMode) ? "default" : s.PermissionMode;
         vm.TotalCostUsd = s.TotalCostUsd;
         vm.PendingPreamble = s.PendingPreamble;
-
-        // Fusion sessions: load secondary worktree paths so claude can be spawned with --add-dir
-        // for each. Ordinal 0 == primary == s.WorktreePath, so skip it.
-        var fusionDirs = _db.GetSessionWorktrees(s.Id);
-        if (fusionDirs.Count > 0)
-            vm.AdditionalDirs = fusionDirs.Where(w => w.Ordinal > 0)
-                .Select(w => w.WorktreePath).ToList();
 
         // Restore Plan state if claude has ever run TodoWrite for this session.
         if (!string.IsNullOrEmpty(s.PlanJson))
@@ -603,6 +606,7 @@ public sealed class SessionManager : IDisposable
             _db.InsertSessionWorktree(new SessionWorktree(
                 SessionId: s.Id,
                 MemberProjectId: memberRecords[i].Id,
+                RepoPath: memberRecords[i].Path,
                 WorktreePath: specs[i].WorktreePath,
                 BranchName: branch,
                 BaseBranch: memberRecords[i].DefaultBranch,
@@ -709,15 +713,21 @@ public sealed class SessionManager : IDisposable
         var newRows = new List<SessionWorktree>(sourceRows.Count);
         foreach (var row in sourceRows)
         {
-            var memberRec = _db.GetProject(row.MemberProjectId)
-                ?? throw new InvalidOperationException(
-                    $"fusion member {row.MemberProjectId} no longer exists");
-            var newWt = Path.Combine(fusionRoot, memberRec.Id[..8]);
+            // RepoPath is snapshotted on the source row so we can fork even if the underlying
+            // member project record was deleted. If repo_path is empty (a row predates the
+            // backfill) fall back to looking it up.
+            var repoPath = !string.IsNullOrEmpty(row.RepoPath)
+                ? row.RepoPath
+                : _db.GetProject(row.MemberProjectId)?.Path
+                  ?? throw new InvalidOperationException(
+                      $"fusion member {row.MemberProjectId} has no recorded repo path and is no longer registered");
+            var newWt = Path.Combine(fusionRoot, row.MemberProjectId[..8]);
             specs.Add(new WorktreeService.FusionForkSpec(
-                memberRec.Path, row.WorktreePath, newWt, branch));
+                repoPath, row.WorktreePath, newWt, branch));
             newRows.Add(new SessionWorktree(
                 SessionId: "",
                 MemberProjectId: row.MemberProjectId,
+                RepoPath: repoPath,
                 WorktreePath: newWt,
                 BranchName: branch,
                 BaseBranch: row.BaseBranch,
@@ -864,13 +874,15 @@ public sealed class SessionManager : IDisposable
         {
             if (projectRecord.Kind == ProjectKinds.Fusion)
             {
-                // Remove every member's worktree using its own repo path. Look up the rows
-                // before DeleteSession cascades them away.
+                // Remove every member's worktree using the repo path snapshotted on the row.
+                // We deliberately don't look up the member project record — if it was deleted
+                // the row's RepoPath is still valid, so the cleanup still runs and the
+                // worktree on disk doesn't leak. Look up the rows before DeleteSession
+                // cascades them away.
                 foreach (var row in _db.GetSessionWorktrees(s.Id))
                 {
-                    var memberRec = _db.GetProject(row.MemberProjectId);
-                    if (memberRec is null) continue;
-                    try { WorktreeService.RemoveWorktree(memberRec.Path, row.WorktreePath, row.BranchName); }
+                    if (string.IsNullOrEmpty(row.RepoPath)) continue;
+                    try { WorktreeService.RemoveWorktree(row.RepoPath, row.WorktreePath, row.BranchName); }
                     catch { /* best-effort */ }
                 }
             }

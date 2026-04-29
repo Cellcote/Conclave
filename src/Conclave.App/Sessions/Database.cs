@@ -102,6 +102,19 @@ public sealed class Database : IDisposable
             );
             CREATE INDEX ix_session_worktrees_session ON session_worktrees(session_id, ordinal);
             """),
+        (11, """
+            -- Snapshot of the member repo's path at session-creation time. Stored on the
+            -- session row so DeleteSession can still find and remove the worktree on disk
+            -- after the underlying member project is deleted (the FK on member_project_id
+            -- is intentionally absent so a deleted project doesn't cascade-orphan the
+            -- session_worktrees row before we get a chance to clean it up).
+            ALTER TABLE session_worktrees ADD COLUMN repo_path TEXT NOT NULL DEFAULT '';
+            UPDATE session_worktrees
+            SET repo_path = (
+              SELECT p.path FROM projects p WHERE p.id = session_worktrees.member_project_id
+            )
+            WHERE repo_path = '';
+            """),
     };
 
     // Explicit column lists so ordinal mapping in Read*() stays stable.
@@ -478,7 +491,7 @@ public sealed class Database : IDisposable
     {
         using var cmd = _conn.CreateCommand();
         cmd.CommandText =
-            "SELECT session_id, member_project_id, worktree_path, branch_name, base_branch, ordinal " +
+            "SELECT session_id, member_project_id, repo_path, worktree_path, branch_name, base_branch, ordinal " +
             "FROM session_worktrees WHERE session_id = $sid ORDER BY ordinal ASC;";
         cmd.Parameters.AddWithValue("$sid", sessionId);
         var list = new List<SessionWorktree>();
@@ -486,15 +499,16 @@ public sealed class Database : IDisposable
         while (r.Read())
             list.Add(new SessionWorktree(
                 r.GetString(0), r.GetString(1), r.GetString(2),
-                r.GetString(3), r.GetString(4), r.GetInt32(5)));
+                r.GetString(3), r.GetString(4), r.GetString(5), r.GetInt32(6)));
         return list;
     }
 
     public void InsertSessionWorktree(SessionWorktree w) => Exec(
         "INSERT INTO session_worktrees " +
-        "(session_id, member_project_id, worktree_path, branch_name, base_branch, ordinal) " +
-        "VALUES ($sid, $mid, $wt, $br, $base, $ord);",
+        "(session_id, member_project_id, repo_path, worktree_path, branch_name, base_branch, ordinal) " +
+        "VALUES ($sid, $mid, $repo, $wt, $br, $base, $ord);",
         ("$sid", w.SessionId), ("$mid", w.MemberProjectId),
+        ("$repo", w.RepoPath),
         ("$wt", w.WorktreePath), ("$br", w.BranchName),
         ("$base", w.BaseBranch), ("$ord", w.Ordinal));
 

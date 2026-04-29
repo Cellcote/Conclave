@@ -16,7 +16,7 @@ public sealed class SessionVm : Views.Observable
 
     // Secondary worktree paths for fusion sessions, passed to claude as `--add-dir <path>`.
     // Empty for repo-kind sessions.
-    public IReadOnlyList<string> AdditionalDirs { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> AdditionalDirs { get; init; } = Array.Empty<string>();
     public DateTime StartedUtc { get; init; } = DateTime.UtcNow;
     public int Pid { get; init; }
     public string LastActivity { get; init; } = "";
