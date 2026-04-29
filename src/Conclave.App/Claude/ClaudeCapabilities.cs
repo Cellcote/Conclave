@@ -11,6 +11,10 @@ public sealed class ClaudeCapabilities
     public string? BinaryPath { get; }
     public bool Available => !string.IsNullOrEmpty(Version);
 
+    // --fork-session was added to Claude Code in 2.x. Conservative gate so the menu item
+    // hides on older builds where the flag would error out.
+    public bool SupportsForkSession => AtLeast(Version, "2.0.0");
+
     private ClaudeCapabilities(string? version, string? path)
     {
         Version = version;

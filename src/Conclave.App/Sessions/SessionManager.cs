@@ -475,6 +475,66 @@ public sealed class SessionManager : IDisposable
         return vm;
     }
 
+    // Fork: spawn a new session that branches off the source's current state. The new
+    // worktree starts at the source's HEAD with its uncommitted tracked changes carried over
+    // (untracked files are skipped — v1 limitation). The transcript is copied wholesale so
+    // the UI reads continuously, and the source's claude session id is staged so the first
+    // turn passes `--fork-session`, making the model retain its prior context.
+    public SessionVm ForkSession(SessionVm source)
+    {
+        var project = FindProjectOf(source)
+            ?? throw new InvalidOperationException("source session is not in any project");
+        var projectRecord = _db.GetProject(project.Id)
+            ?? throw new InvalidOperationException($"project {project.Id} not found");
+
+        var sourceSlug = DeriveSlug(source.Branch);
+        var forkSuffix = Guid.NewGuid().ToString("N")[..6];
+        var slug = $"{sourceSlug}-fork-{forkSuffix}";
+        var branch = $"conclave/{slug}";
+        var wtPath = Path.Combine(_worktreeRoot, project.Id, slug);
+
+        WorktreeService.ForkWorktree(projectRecord.Path, source.Worktree, wtPath, branch);
+
+        var now = Database.Now();
+        var s = new Session
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ProjectId = project.Id,
+            Name = $"Fork of {source.Title}",
+            BranchName = branch,
+            WorktreePath = wtPath,
+            BaseBranch = source.BaseBranch,
+            Model = source.Model,
+            Status = SessionStatus.Idle.ToString(),
+            PermissionMode = source.PermissionMode,
+            CreatedAt = now,
+            LastActiveAt = now,
+        };
+        _db.InsertSession(s);
+
+        foreach (var row in _db.GetMessages(source.Id))
+        {
+            _db.InsertMessage(new MessageRow
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SessionId = s.Id,
+                Role = row.Role,
+                Content = row.Content,
+                ToolsJson = row.ToolsJson,
+                CreatedAt = row.CreatedAt,
+                Seq = row.Seq,
+            });
+        }
+
+        var vm = BuildSessionVm(s);
+        vm.PendingForkFromClaudeSessionId = source.ClaudeSessionId;
+
+        var idx = project.Sessions.IndexOf(source);
+        if (idx < 0) project.Sessions.Insert(0, vm);
+        else project.Sessions.Insert(idx + 1, vm);
+        return vm;
+    }
+
     public void RenameSession(SessionVm s, string newName)
     {
         var trimmed = (newName ?? "").Trim();

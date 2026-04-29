@@ -64,6 +64,7 @@ public sealed class ClaudeService
                 modelAlias,
                 permissionMode: session.PermissionMode,
                 includePartialMessages: true,
+                forkFromSessionId: session.PendingForkFromClaudeSessionId,
                 ct: linked.Token))
             {
                 Handle(session, ev, toolsById, messageByToolId, liveByMessageId);
@@ -117,7 +118,12 @@ public sealed class ClaudeService
         {
             case SystemInitEvent init:
                 if (string.IsNullOrEmpty(session.ClaudeSessionId) && !string.IsNullOrEmpty(init.SessionId))
+                {
                     _manager.UpdateClaudeSessionId(session, init.SessionId);
+                    // Once claude has minted our own session id, the fork is durable and
+                    // future turns should --resume it directly, not re-fork from the source.
+                    session.PendingForkFromClaudeSessionId = null;
+                }
                 break;
 
             case StreamDeltaEvent delta:

@@ -113,6 +113,9 @@
                                                 <Border.ContextMenu>
                                                     <ContextMenu>
                                                         <MenuItem Header="Rename" Click="OnRenameMenu" />
+                                                        <MenuItem Header="Fork" Click="OnForkMenu"
+                                                                  IsEnabled="{Binding !IsBusy}"
+                                                                  IsVisible="{Binding $parent[UserControl].DataContext.Claude.SupportsForkSession}" />
                                                         <MenuItem Header="Delete" Click="OnDeleteMenu" />
                                                     </ContextMenu>
                                                 </Border.ContextMenu>

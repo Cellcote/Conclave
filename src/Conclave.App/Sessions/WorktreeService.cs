@@ -120,6 +120,54 @@ public static class WorktreeService
             throw new InvalidOperationException($"git worktree add failed: {err.Trim()}");
     }
 
+    // Forks a worktree: creates a new branch off the source worktree's current HEAD commit,
+    // checks it out at newWorktreePath, and replays the source's uncommitted tracked changes
+    // (staged + unstaged) on top via `git diff HEAD | git apply`. Untracked files are not
+    // copied. Patch-apply failure does not abort the fork — the new worktree exists either
+    // way; the user can re-apply manually if needed.
+    public static void ForkWorktree(string repoPath, string sourceWorktreePath, string newWorktreePath, string newBranchName)
+    {
+        var parent = Path.GetDirectoryName(newWorktreePath);
+        if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+
+        var (rcCode, rcOut, rcErr) = Run(sourceWorktreePath, "rev-parse", "HEAD");
+        if (rcCode != 0)
+            throw new InvalidOperationException($"could not resolve source HEAD: {rcErr.Trim()}");
+        var sourceCommit = rcOut.Trim();
+
+        var (addCode, _, addErr) = Run(repoPath, "worktree", "add", "-b", newBranchName, newWorktreePath, sourceCommit);
+        if (addCode != 0)
+            throw new InvalidOperationException($"git worktree add failed: {addErr.Trim()}");
+
+        var (diffCode, diffOut, _) = Run(sourceWorktreePath, "diff", "HEAD");
+        if (diffCode == 0 && !string.IsNullOrEmpty(diffOut))
+            TryApplyPatch(newWorktreePath, diffOut);
+    }
+
+    private static void TryApplyPatch(string worktreePath, string patch)
+    {
+        var psi = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = worktreePath,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add("apply");
+        psi.ArgumentList.Add("--3way");
+        try
+        {
+            using var proc = Process.Start(psi);
+            if (proc is null) return;
+            proc.StandardInput.Write(patch);
+            proc.StandardInput.Close();
+            proc.WaitForExit();
+        }
+        catch { /* best-effort */ }
+    }
+
     // Removes the worktree and deletes the branch.
     public static void RemoveWorktree(string repoPath, string worktreePath, string branchName)
     {
