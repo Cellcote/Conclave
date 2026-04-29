@@ -458,6 +458,8 @@ public sealed class SessionManager : IDisposable
         if (!string.IsNullOrWhiteSpace(branchName))
         {
             branch = branchName.Trim();
+            if (BranchNameValidator.Validate(branch) is { } reason)
+                throw new InvalidOperationException(reason);
             slug = DeriveSlug(branch);
             display = slug.Replace('-', ' ');
             if (SessionExistsByBranch(project, branch))
