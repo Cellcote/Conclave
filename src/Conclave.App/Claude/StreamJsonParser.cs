@@ -30,7 +30,10 @@ public static class StreamJsonParser
                 // Top-level types we acknowledge but don't act on.
                 "auth_status" or "tool_progress" or "tool_use_summary" => new InformationalEvent
                 {
-                    Type = type, SessionId = sessionId, Uuid = uuid, Subtype = Str(root, "subtype"),
+                    Type = type,
+                    SessionId = sessionId,
+                    Uuid = uuid,
+                    Subtype = Str(root, "subtype"),
                 },
                 _ => new UnknownEvent { Type = type, SessionId = sessionId, Uuid = uuid, Raw = line },
             };
@@ -74,12 +77,14 @@ public static class StreamJsonParser
                 if (ev.TryGetProperty("index", out var idxE) && idxE.TryGetInt32(out var i3))
                     blockIndex = i3;
                 break;
-            // message_delta / message_stop carry stop_reason + usage but we don't need them live.
+                // message_delta / message_stop carry stop_reason + usage but we don't need them live.
         }
 
         return new StreamDeltaEvent
         {
-            Type = type, SessionId = sid, Uuid = uuid,
+            Type = type,
+            SessionId = sid,
+            Uuid = uuid,
             EventType = eventType,
             MessageId = messageId,
             BlockIndex = blockIndex,
@@ -102,7 +107,10 @@ public static class StreamJsonParser
         // per t3code, system/hook_* session_ids are NOT durable.
         return new InformationalEvent
         {
-            Type = type, SessionId = sid, Uuid = uuid, Subtype = subtype,
+            Type = type,
+            SessionId = sid,
+            Uuid = uuid,
+            Subtype = subtype,
         };
     }
 
@@ -122,9 +130,12 @@ public static class StreamJsonParser
 
         return new AssistantEvent
         {
-            Type = type, SessionId = sid, Uuid = uuid,
+            Type = type,
+            SessionId = sid,
+            Uuid = uuid,
             MessageId = messageId,
-            Content = content, StopReason = stopReason,
+            Content = content,
+            StopReason = stopReason,
         };
     }
 
@@ -143,7 +154,9 @@ public static class StreamJsonParser
     {
         return new ResultEvent
         {
-            Type = type, SessionId = sid, Uuid = uuid,
+            Type = type,
+            SessionId = sid,
+            Uuid = uuid,
             Subtype = Str(root, "subtype"),
             IsError = root.TryGetProperty("is_error", out var err) && err.ValueKind == JsonValueKind.True,
             Result = Str(root, "result"),
@@ -185,7 +198,7 @@ public static class StreamJsonParser
                         IsError = el.TryGetProperty("is_error", out var ie) && ie.ValueKind == JsonValueKind.True,
                     });
                     break;
-                // thinking, redacted_thinking, etc. — skip for now.
+                    // thinking, redacted_thinking, etc. — skip for now.
             }
         }
         return list.ToArray();

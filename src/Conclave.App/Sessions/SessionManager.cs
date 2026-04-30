@@ -248,7 +248,9 @@ public sealed class SessionManager : IDisposable
                     "D" => FileChangeKind.Deleted,
                     _ => FileChangeKind.Modified,
                 },
-                Path = c.Path, Add = c.Add, Del = c.Del,
+                Path = c.Path,
+                Add = c.Add,
+                Del = c.Del,
             });
         }
         // Defer the persist to a Background-priority dispatch. The Database wraps a single
