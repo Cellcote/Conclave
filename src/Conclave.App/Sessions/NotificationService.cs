@@ -71,8 +71,8 @@ public sealed class NotificationService
         var imagePart = string.IsNullOrEmpty(IconPath) ? ""
             : $"<image placement=\"appLogoOverride\" src=\"file:///{EscapeXml(IconPath.Replace('\\', '/'))}\"/>";
         var xml = "<toast><visual><binding template=\"ToastGeneric\">"
-            + $"<text>{EscapeXml(title)}</text><text>{EscapeXml(message)}</text>"
             + imagePart
+            + $"<text>{EscapeXml(title)}</text><text>{EscapeXml(message)}</text>"
             + "</binding></visual></toast>";
         var ps = "$ErrorActionPreference='SilentlyContinue';"
             + "[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];"
