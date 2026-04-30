@@ -1,4 +1,7 @@
-# Conclave
+<h1>
+  <img src="./assets/logo.png" alt="" width="64" height="64" align="left" />
+  Conclave
+</h1>
 
 **A desktop home for your Claude Code sessions — many at once, each in its own git worktree.**
 
