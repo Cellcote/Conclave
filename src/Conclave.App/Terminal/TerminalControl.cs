@@ -112,11 +112,29 @@ public sealed class TerminalControl : Control
         {
             while (await reader.WaitToReadAsync(ct))
             {
-                while (reader.TryRead(out var chunk)) _parser.Feed(chunk);
+                while (reader.TryRead(out var chunk))
+                {
+                    // Catch per-chunk so a single malformed sequence (parser index-OOB,
+                    // bad UTF-8 in an obscure CSI, etc.) doesn't kill the whole pump and
+                    // freeze the terminal silently. The Task return is discarded with
+                    // `_ = PumpLoopAsync(...)` — without this the unobserved exception
+                    // would just leave the loop faulted with no log. Surface the failure
+                    // into the buffer and continue: subsequent chunks may parse fine.
+                    try { _parser.Feed(chunk); }
+                    catch (Exception ex) { PaintPumpError(ex); }
+                }
                 InvalidateVisual();
             }
         }
         catch (OperationCanceledException) { /* detach */ }
+    }
+
+    private void PaintPumpError(Exception ex)
+    {
+        var msg = $"[conclave] parser error: {ex.Message}";
+        foreach (var ch in msg) _buffer.Write(ch);
+        _buffer.LineFeed();
+        _buffer.CarriageReturn();
     }
 
     protected override Size MeasureOverride(Size availableSize) => availableSize;
