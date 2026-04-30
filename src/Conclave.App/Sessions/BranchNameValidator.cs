@@ -8,25 +8,27 @@ namespace Conclave.App.Sessions;
 public static class BranchNameValidator
 {
     // Returns null on success, or a human-readable reason for the failure.
+    // Validates the input string exactly as given — callers must trim themselves so
+    // IsValid("foo ") can't disagree with what actually flows into git.
     public static string? Validate(string? name)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrEmpty(name))
             return "Branch name cannot be empty.";
 
-        var n = name.Trim();
-
-        if (n.StartsWith('-'))
+        if (name.StartsWith('-'))
             return "Branch name cannot start with '-'.";
-        if (n.StartsWith('/') || n.EndsWith('/'))
+        if (name.StartsWith('.'))
+            return "Branch name cannot start with '.'.";
+        if (name.StartsWith('/') || name.EndsWith('/'))
             return "Branch name cannot start or end with '/'.";
-        if (n.EndsWith('.') || n.EndsWith(".lock"))
+        if (name.EndsWith('.') || name.EndsWith(".lock"))
             return "Branch name cannot end with '.' or '.lock'.";
-        if (n.Contains("..") || n.Contains("//") || n.Contains("/.") || n.Contains("@{"))
+        if (name.Contains("..") || name.Contains("//") || name.Contains("/.") || name.Contains("@{"))
             return "Branch name cannot contain '..', '//', '/.' or '@{'.";
-        if (n == "@")
+        if (name == "@")
             return "Branch name cannot be just '@'.";
 
-        foreach (var c in n)
+        foreach (var c in name)
         {
             if (c < 0x20 || c == 0x7F)
                 return "Branch name cannot contain control characters.";
