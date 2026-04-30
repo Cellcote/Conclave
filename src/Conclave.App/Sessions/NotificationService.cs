@@ -13,18 +13,22 @@ public sealed class NotificationService
     // active we suppress notifications — the user can already see whatever changed in-app.
     public Func<bool>? IsWindowActive { get; set; }
 
+    // Optional path to the app icon file used on Linux (notify-send -i) and Windows (toast
+    // image). macOS display notification doesn't support a custom icon path.
+    public string? IconPath { get; set; }
+
     public void NotifyTurnComplete(string sessionTitle, bool error)
     {
         if (!ShouldNotify()) return;
-        var title = error ? "Claude hit an error" : "Claude is done";
-        Post(title, sessionTitle);
+        var body = error ? "Claude hit an error" : "Claude is done";
+        Post(sessionTitle, body);
     }
 
     public void NotifyQuestionPending(string sessionTitle, string question)
     {
         if (!ShouldNotify()) return;
-        var body = string.IsNullOrWhiteSpace(question) ? sessionTitle : $"{sessionTitle} — {question}";
-        Post("Claude is asking a question", body);
+        var body = string.IsNullOrWhiteSpace(question) ? "Claude is asking a question" : $"Claude is asking a question — {question}";
+        Post(sessionTitle, body);
     }
 
     private bool ShouldNotify()
@@ -33,7 +37,7 @@ public sealed class NotificationService
         return IsWindowActive is null || !IsWindowActive();
     }
 
-    private static void Post(string title, string message)
+    private void Post(string title, string message)
     {
         try
         {
@@ -50,18 +54,25 @@ public sealed class NotificationService
         StartDetached("osascript", new[] { "-e", script });
     }
 
-    private static void PostLinux(string title, string message)
+    private void PostLinux(string title, string message)
     {
-        StartDetached("notify-send", new[] { title, message });
+        var args = new List<string>();
+        if (!string.IsNullOrEmpty(IconPath)) { args.Add("-i"); args.Add(IconPath); }
+        args.Add(title);
+        args.Add(message);
+        StartDetached("notify-send", [.. args]);
     }
 
-    private static void PostWindows(string title, string message)
+    private void PostWindows(string title, string message)
     {
         // PowerShell + WinRT toast — works on Win10+ without an extra dependency. The
         // AppId we show under is "Conclave"; Windows will fall back to PowerShell's icon
         // until the shortcut is registered, which is acceptable for a lightweight toast.
+        var imagePart = string.IsNullOrEmpty(IconPath) ? ""
+            : $"<image placement=\"appLogoOverride\" src=\"file:///{EscapeXml(IconPath.Replace('\\', '/'))}\"/>";
         var xml = "<toast><visual><binding template=\"ToastGeneric\">"
             + $"<text>{EscapeXml(title)}</text><text>{EscapeXml(message)}</text>"
+            + imagePart
             + "</binding></visual></toast>";
         var ps = "$ErrorActionPreference='SilentlyContinue';"
             + "[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];"

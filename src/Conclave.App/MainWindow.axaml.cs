@@ -47,10 +47,12 @@ public partial class MainWindow : Window
 
         // Native OS notifications for "claude is done" / "claude is asking a question".
         // We suppress while the window is active — the user already has eyes on it.
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.png");
         var notifications = new NotificationService
         {
             Enabled = SettingsKeys.ReadNotificationsEnabled(_manager.Db),
             IsWindowActive = () => _isWindowActive,
+            IconPath = File.Exists(iconPath) ? iconPath : null,
         };
         _manager.Notifications = notifications;
 
