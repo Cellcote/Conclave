@@ -17,7 +17,16 @@ public sealed class SessionManager : IDisposable
     // app with 30+ sessions fans out 30+ gh processes simultaneously — each up to 5s wait —
     // and so does the post-turn refresh path when several sessions tick over together. 4
     // is enough to mask network latency without hammering the user's machine.
+    //
+    // Static and process-wide on purpose: this app is single-instance, the gate must bound
+    // total subprocess concurrency rather than per-instance, and tests aren't expected to
+    // construct multiple SessionManagers concurrently.
     private static readonly SemaphoreSlim PrRefreshGate = new(initialCount: 4, maxCount: 4);
+
+    // Lighter-weight gate for `git diff` invocations. git is local and fast (~tens of ms
+    // typically), but on a slow disk or huge repo dozens of concurrent git subprocesses at
+    // startup can still pile up. 8 is a safe burst ceiling.
+    private static readonly SemaphoreSlim DiffRefreshGate = new(initialCount: 8, maxCount: 8);
 
     public ObservableCollection<ProjectVm> Projects { get; } = new();
 
@@ -184,20 +193,26 @@ public sealed class SessionManager : IDisposable
     }
 
     // Refresh diff stats for one session — call after a claude turn completes or on
-    // session load. The git invocations run on a thread-pool thread; the apply step (VM
-    // mutation + DB write) marshals back to the UI thread.
+    // session load. The git invocations run on a thread-pool thread, behind a lightweight
+    // concurrency gate so a startup with many sessions doesn't fan out a git subprocess
+    // per session; the apply step (VM mutation + DB write) marshals back to the UI thread.
     public void RefreshDiff(SessionVm s)
     {
         var worktree = s.Worktree;
         var baseBranch = s.BaseBranch;
         _ = Task.Run(async () =>
         {
+            await DiffRefreshGate.WaitAsync();
             try
             {
                 var diff = WorktreeService.ComputeDiff(worktree, baseBranch);
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ApplyDiff(s, diff));
             }
             catch { /* best-effort */ }
+            finally
+            {
+                DiffRefreshGate.Release();
+            }
         });
     }
 
