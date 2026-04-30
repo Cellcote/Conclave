@@ -35,5 +35,8 @@
        the .ico above is only consumed by the Windows PE metadata. -->
   <ItemGroup>
     <AvaloniaResource Include="../../assets/icon-256.png" Link="Assets/icon.png" />
+    <!-- Also copy to output so NotificationService can pass a file path to
+         notify-send (Linux) and the WinRT toast image element (Windows). -->
+    <Content Include="../../assets/icon-256.png" Link="Assets/icon.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
