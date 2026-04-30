@@ -27,6 +27,11 @@ hand.
   place.
 - **A worktree per session.** New sessions run `git worktree add` for you,
   so branches never step on each other and you never have to stash again.
+- **Fusion projects.** Bundle multiple repos behind one project and run a
+  single session across all of them. Conclave adds a worktree on a shared
+  branch in every member repo; the primary's worktree becomes the session's
+  cwd, and the secondaries are handed to `claude` via `--add-dir`. Forks
+  fan out the same way.
 - **Live status at a glance.** Working, waiting, running a tool, idle, or
   errored — visible from the sidebar without opening the session.
 - **Transcript, Plan, Logs.** Three views per session. The plan view turns
