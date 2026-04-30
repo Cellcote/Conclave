@@ -8,6 +8,8 @@ public static class PermissionModes
     public const string AcceptEdits = "acceptEdits";         // auto-accept file edits, prompt for bash
     public const string BypassPermissions = "bypassPermissions"; // auto-accept everything
 
+    public static IReadOnlyList<string> All { get; } = new[] { Default, AcceptEdits, BypassPermissions };
+
     public static string DisplayName(string mode) => mode switch
     {
         AcceptEdits => "Auto-accept edits",

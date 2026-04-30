@@ -95,17 +95,13 @@
                                    FontSize="12" Foreground="{Binding Tokens.TextDim}"
                                    VerticalAlignment="Center" />
                         <ComboBox Grid.Row="8" Grid.Column="1" x:Name="PermissionPicker"
-                                  SelectedValue="{Binding ActiveSession.PermissionMode, Mode=OneWay}"
-                                  SelectedValueBinding="{ReflectionBinding Content}"
+                                  ItemsSource="{x:Static vm:PermissionModes.All}"
+                                  SelectedItem="{Binding ActiveSession.PermissionMode, Mode=OneWay}"
                                   SelectionChanged="OnPermissionModeChanged"
                                   HorizontalAlignment="Stretch" MinWidth="0"
                                   FontSize="12" Padding="8,2"
                                   Background="Transparent"
-                                  BorderBrush="{Binding Tokens.Border}" BorderThickness="1">
-                            <ComboBoxItem Content="default" />
-                            <ComboBoxItem Content="acceptEdits" />
-                            <ComboBoxItem Content="bypassPermissions" />
-                        </ComboBox>
+                                  BorderBrush="{Binding Tokens.Border}" BorderThickness="1" />
                     </Grid>
                 </StackPanel>
 
