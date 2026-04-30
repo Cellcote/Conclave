@@ -4,13 +4,14 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
-using Avalonia.Threading;
 
 namespace Conclave.App.Terminal;
 
 // Custom terminal control: owns the buffer, parser, PTY session, and does its own drawing.
 // Single-threaded: all buffer mutations and rendering happen on the UI thread.
-// PTY read loop runs on a background Task and posts chunks onto a channel that we drain at ~120Hz.
+// PTY read loop runs on a background Task and posts chunks onto a channel; an async
+// pump loop on the UI thread awaits ChannelReader.WaitToReadAsync and drains as data
+// arrives — zero CPU when idle.
 public sealed class TerminalControl : Control
 {
     private readonly Typeface _typeface = new("Menlo");
@@ -24,8 +25,14 @@ public sealed class TerminalControl : Control
     // Set before the control is attached to the visual tree to pin the child process's cwd.
     public string? WorkingDirectory { get; set; }
 
-    private DispatcherTimer? _pumpTimer;
-    private bool _dirtyPending;
+    // Cancellation source for the async pump loop. Triggered on detach so the loop
+    // exits its WaitToReadAsync without leaking a Task.
+    private CancellationTokenSource? _pumpCts;
+
+    // Tracks whether OnAttachedToVisualTree has fired without a matching detach. Used
+    // by StartSessionAsync to handle the case where the control gets detached while
+    // SpawnAsync was still in flight.
+    private bool _attached;
 
     // Transient buffers reused per Render frame to avoid per-frame allocations.
     private readonly StringBuilder _runChars = new(256);
@@ -42,27 +49,28 @@ public sealed class TerminalControl : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        _attached = true;
         Focus();
         _ = StartSessionAsync();
-
-        _pumpTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(8), DispatcherPriority.Render, Pump);
-        _pumpTimer.Start();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        _pumpTimer?.Stop();
-        _pumpTimer = null;
+        _attached = false;
+        _pumpCts?.Cancel();
+        _pumpCts?.Dispose();
+        _pumpCts = null;
         if (_session is { } s) _ = s.DisposeAsync();
         _session = null;
     }
 
     private async Task StartSessionAsync()
     {
+        PtySession spawned;
         try
         {
-            _session = await PtySession.SpawnAsync(_buffer.Cols, _buffer.Rows, WorkingDirectory);
+            spawned = await PtySession.SpawnAsync(_buffer.Cols, _buffer.Rows, WorkingDirectory);
         }
         catch (Exception ex)
         {
@@ -72,25 +80,61 @@ public sealed class TerminalControl : Control
             _buffer.LineFeed();
             _buffer.CarriageReturn();
             InvalidateVisual();
+            return;
         }
+
+        // The control may have been detached while we awaited SpawnAsync. If so, the
+        // detach handler has already run with `_session == null`, so nothing called
+        // DisposeAsync on the spawned process. Dispose here and bail before we wire up
+        // the pump loop on a control that's no longer in the tree.
+        if (!_attached)
+        {
+            _ = spawned.DisposeAsync();
+            return;
+        }
+
+        _session = spawned;
+        // Pump loop runs on the UI thread (StartSessionAsync was awaited from
+        // OnAttachedToVisualTree, which captures the dispatcher SyncContext) so
+        // _parser.Feed and the buffer it mutates stay on a single thread alongside
+        // Render. WaitToReadAsync suspends with zero CPU when nothing's queued —
+        // unlike the previous 125Hz timer that fired even when idle.
+        _pumpCts = new CancellationTokenSource();
+        _ = PumpLoopAsync(_pumpCts.Token);
     }
 
-    private void Pump(object? sender, EventArgs e)
+    private async Task PumpLoopAsync(CancellationToken ct)
     {
-        if (_session is null) return;
-        var reader = _session.Output;
+        var reader = _session?.Output;
+        if (reader is null) return;
 
-        bool any = false;
-        while (reader.TryRead(out var chunk))
+        try
         {
-            _parser.Feed(chunk);
-            any = true;
+            while (await reader.WaitToReadAsync(ct))
+            {
+                while (reader.TryRead(out var chunk))
+                {
+                    // Catch per-chunk so a single malformed sequence (parser index-OOB,
+                    // bad UTF-8 in an obscure CSI, etc.) doesn't kill the whole pump and
+                    // freeze the terminal silently. The Task return is discarded with
+                    // `_ = PumpLoopAsync(...)` — without this the unobserved exception
+                    // would just leave the loop faulted with no log. Surface the failure
+                    // into the buffer and continue: subsequent chunks may parse fine.
+                    try { _parser.Feed(chunk); }
+                    catch (Exception ex) { PaintPumpError(ex); }
+                }
+                InvalidateVisual();
+            }
         }
-        if (any || _dirtyPending)
-        {
-            _dirtyPending = false;
-            InvalidateVisual();
-        }
+        catch (OperationCanceledException) { /* detach */ }
+    }
+
+    private void PaintPumpError(Exception ex)
+    {
+        var msg = $"[conclave] parser error: {ex.Message}";
+        foreach (var ch in msg) _buffer.Write(ch);
+        _buffer.LineFeed();
+        _buffer.CarriageReturn();
     }
 
     protected override Size MeasureOverride(Size availableSize) => availableSize;
@@ -109,7 +153,10 @@ public sealed class TerminalControl : Control
         if (cols == _buffer.Cols && rows == _buffer.Rows) return;
         _buffer.Resize(cols, rows);
         _session?.Resize(cols, rows);
-        _dirtyPending = true;
+        // Pump loop only wakes on PTY output; if the shell is parked at a static prompt
+        // there's no incoming chunk to drive a repaint. Invalidate directly here so the
+        // resized buffer paints on the next frame.
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext ctx)
