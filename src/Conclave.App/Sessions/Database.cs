@@ -326,10 +326,6 @@ public sealed class Database : IDisposable
         ("$id", id), ("$prNumber", (object?)prNumber), ("$prState", (object?)prState),
         ("$prMergedAt", (object?)prMergedAt));
 
-    public void UpdateSessionUnread(string id, int unread) => Exec(
-        "UPDATE sessions SET unread_count = $unread WHERE id = $id;",
-        ("$id", id), ("$unread", unread));
-
     public void UpdateClaudeSessionId(string id, string? claudeSessionId) => Exec(
         "UPDATE sessions SET claude_session_id = $cid WHERE id = $id;",
         ("$id", id), ("$cid", (object?)claudeSessionId));

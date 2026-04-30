@@ -94,12 +94,7 @@ public static class StreamJsonParser
         var subtype = Str(root, "subtype");
         if (subtype == "init")
         {
-            return new SystemInitEvent
-            {
-                Type = type, SessionId = sid, Uuid = uuid,
-                Model = Str(root, "model"),
-                Cwd = Str(root, "cwd"),
-            };
+            return new SystemInitEvent { Type = type, SessionId = sid, Uuid = uuid };
         }
         // Every other system event (compact_boundary, hook_started/progress/response, status,
         // task_*, files_persisted, …). Parsed into InformationalEvent so they don't fall
@@ -113,14 +108,13 @@ public static class StreamJsonParser
 
     private static StreamJsonEvent ParseAssistant(JsonElement root, string type, string sid, string? uuid)
     {
-        string messageId = "", model = "";
+        string messageId = "";
         string? stopReason = null;
         var content = Array.Empty<ContentBlock>();
 
         if (root.TryGetProperty("message", out var msg) && msg.ValueKind == JsonValueKind.Object)
         {
             messageId = Str(msg, "id") ?? "";
-            model = Str(msg, "model") ?? "";
             stopReason = Str(msg, "stop_reason");
             if (msg.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.Array)
                 content = ParseContentBlocks(c);
@@ -129,7 +123,7 @@ public static class StreamJsonParser
         return new AssistantEvent
         {
             Type = type, SessionId = sid, Uuid = uuid,
-            MessageId = messageId, Model = model,
+            MessageId = messageId,
             Content = content, StopReason = stopReason,
         };
     }

@@ -84,7 +84,6 @@ public sealed class SessionManager : IDisposable
             StartedUtc = s.StartedUtc is { } t
                 ? DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime
                 : DateTime.UtcNow,
-            LastActivity = RelativeTime(s.LastActiveAt),
             Status = loadedStatus,
             Unread = s.UnreadCount,
             Diff = BuildDiff(s),
@@ -398,15 +397,6 @@ public sealed class SessionManager : IDisposable
         if (idx > 0) project.Sessions.Move(idx, 0);
     }
 
-    private static string RelativeTime(long unixMs)
-    {
-        var diff = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(unixMs);
-        if (diff.TotalSeconds < 60) return "now";
-        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
-        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
-        return $"{(int)diff.TotalDays}d ago";
-    }
-
     // --- Projects ---
 
     public ProjectVm CreateProject(string name, string path)
@@ -678,12 +668,6 @@ public sealed class SessionManager : IDisposable
         }
         _db.DeleteSession(s.Id);
         if (!skipRemovalFromParent && project is not null) project.Sessions.Remove(s);
-    }
-
-    public void TouchSession(SessionVm s)
-    {
-        _db.TouchSession(s.Id);
-        // Intentionally not rebuilding the VM on touch — LastActivity strings are approximate.
     }
 
     // --- Helpers ---

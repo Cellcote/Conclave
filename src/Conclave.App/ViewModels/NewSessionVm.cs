@@ -5,11 +5,8 @@ namespace Conclave.App.ViewModels;
 
 public sealed class NewSessionVm : Views.Observable
 {
-    private static readonly string[] ModelOptions = { "Haiku 4.5", "Sonnet 4.5", "Opus 4" };
-
     public Tokens Tokens { get; }
     public ObservableCollection<ProjectVm> Projects { get; }
-    public IReadOnlyList<string> Models => ModelOptions;
 
     public NewSessionVm(Tokens tokens, ObservableCollection<ProjectVm> projects)
     {
