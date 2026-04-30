@@ -13,6 +13,21 @@ public sealed class SessionManager : IDisposable
     private readonly string _worktreeRoot;
     private readonly Tokens _tokens;
 
+    // Caps the number of concurrent `gh pr view` subprocesses. Without this, opening the
+    // app with 30+ sessions fans out 30+ gh processes simultaneously — each up to 5s wait —
+    // and so does the post-turn refresh path when several sessions tick over together. 4
+    // is enough to mask network latency without hammering the user's machine.
+    //
+    // Static and process-wide on purpose: this app is single-instance, the gate must bound
+    // total subprocess concurrency rather than per-instance, and tests aren't expected to
+    // construct multiple SessionManagers concurrently.
+    private static readonly SemaphoreSlim PrRefreshGate = new(initialCount: 4, maxCount: 4);
+
+    // Lighter-weight gate for `git diff` invocations. git is local and fast (~tens of ms
+    // typically), but on a slow disk or huge repo dozens of concurrent git subprocesses at
+    // startup can still pile up. 8 is a safe burst ceiling.
+    private static readonly SemaphoreSlim DiffRefreshGate = new(initialCount: 8, maxCount: 8);
+
     public ObservableCollection<ProjectVm> Projects { get; } = new();
 
     // Exposed so subsystems wired alongside SessionManager (settings UI, AutoCleanupService)
@@ -104,7 +119,9 @@ public sealed class SessionManager : IDisposable
             LastActivity = RelativeTime(s.LastActiveAt),
             Status = loadedStatus,
             Unread = s.UnreadCount,
-            Diff = BuildDiff(s),
+            // Seed from cached DB columns so the sidebar paints immediately. Fresh stats
+            // arrive from RefreshDiff in the background.
+            Diff = new DiffStatVm { Files = s.DiffFiles, Add = s.DiffAdd, Del = s.DiffDel },
         };
         vm.Title = s.Name;
         vm.ClaudeSessionId = s.ClaudeSessionId;
@@ -135,62 +152,35 @@ public sealed class SessionManager : IDisposable
                 Base = s.BaseBranch,
             };
         }
-        _ = Task.Run(() => RefreshPrInBackground(vm));
+        // Both refreshes off the UI thread. Diff is two git calls; PR is gated to bound
+        // gh-process concurrency at startup.
+        RefreshDiff(vm);
+        RefreshPr(vm);
 
         return vm;
     }
 
-    private void RefreshPrInBackground(SessionVm vm)
-    {
-        try
-        {
-            var info = GhService.TryGetPullRequest(vm.Worktree);
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyPr(vm, info));
-        }
-        catch { /* best-effort */ }
-    }
-
-    private DiffStatVm BuildDiff(Session s)
-    {
-        // Compute from the worktree directly — cheaper and always fresh. The cached values
-        // on the row (DiffFiles/Add/Del) are only used as an initial paint if the git call
-        // fails for any reason.
-        try
-        {
-            var diff = WorktreeService.ComputeDiff(s.WorktreePath, s.BaseBranch);
-            var vm = new DiffStatVm { Files = diff.Files, Add = diff.Add, Del = diff.Del };
-            foreach (var c in diff.Changes)
-            {
-                vm.Changes.Add(new FileChangeVm
-                {
-                    Kind = c.Kind switch
-                    {
-                        "A" => FileChangeKind.Added,
-                        "D" => FileChangeKind.Deleted,
-                        _ => FileChangeKind.Modified,
-                    },
-                    Path = c.Path,
-                    Add = c.Add,
-                    Del = c.Del,
-                });
-            }
-            // Persist so the sidebar still has numbers if the worktree disappears later.
-            if (diff.Files != s.DiffFiles || diff.Add != s.DiffAdd || diff.Del != s.DiffDel)
-                _db.UpdateSessionDiff(s.Id, diff.Files, diff.Add, diff.Del);
-            return vm;
-        }
-        catch
-        {
-            return new DiffStatVm { Files = s.DiffFiles, Add = s.DiffAdd, Del = s.DiffDel };
-        }
-    }
-
     // Refresh PR info for one session from `gh pr view`. Safe no-op if gh isn't installed
     // or the branch has no associated PR. Called after a claude turn and on session load.
+    // Runs the gh subprocess on a thread-pool thread, behind a concurrency gate, then
+    // marshals the apply step back to the UI thread.
     public void RefreshPr(SessionVm s)
     {
-        try { ApplyPr(s, GhService.TryGetPullRequest(s.Worktree)); }
-        catch { /* best-effort */ }
+        var worktree = s.Worktree;
+        _ = Task.Run(async () =>
+        {
+            await PrRefreshGate.WaitAsync();
+            try
+            {
+                var info = GhService.TryGetPullRequest(worktree);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ApplyPr(s, info));
+            }
+            catch { /* best-effort */ }
+            finally
+            {
+                PrRefreshGate.Release();
+            }
+        });
     }
 
     // Apply a (possibly null) PR-info result to a session VM and the cached DB row. Must be
@@ -219,32 +209,61 @@ public sealed class SessionManager : IDisposable
         _db.UpdateSessionPr(s.Id, pr.Number, state.ToString(), pr.MergedAtUnixMs);
     }
 
-    // Refresh diff stats for one session — call after a claude turn completes.
+    // Refresh diff stats for one session — call after a claude turn completes or on
+    // session load. The git invocations run on a thread-pool thread, behind a lightweight
+    // concurrency gate so a startup with many sessions doesn't fan out a git subprocess
+    // per session; the apply step (VM mutation + DB write) marshals back to the UI thread.
     public void RefreshDiff(SessionVm s)
     {
-        try
+        var worktree = s.Worktree;
+        var baseBranch = s.BaseBranch;
+        _ = Task.Run(async () =>
         {
-            var diff = WorktreeService.ComputeDiff(s.Worktree, s.BaseBranch);
-            s.Diff.Files = diff.Files;
-            s.Diff.Add = diff.Add;
-            s.Diff.Del = diff.Del;
-            s.Diff.Changes.Clear();
-            foreach (var c in diff.Changes)
+            await DiffRefreshGate.WaitAsync();
+            try
             {
-                s.Diff.Changes.Add(new FileChangeVm
-                {
-                    Kind = c.Kind switch
-                    {
-                        "A" => FileChangeKind.Added,
-                        "D" => FileChangeKind.Deleted,
-                        _ => FileChangeKind.Modified,
-                    },
-                    Path = c.Path, Add = c.Add, Del = c.Del,
-                });
+                var diff = WorktreeService.ComputeDiff(worktree, baseBranch);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ApplyDiff(s, diff));
             }
-            _db.UpdateSessionDiff(s.Id, diff.Files, diff.Add, diff.Del);
+            catch { /* best-effort */ }
+            finally
+            {
+                DiffRefreshGate.Release();
+            }
+        });
+    }
+
+    private void ApplyDiff(SessionVm s, WorktreeService.DiffStat diff)
+    {
+        s.Diff.Files = diff.Files;
+        s.Diff.Add = diff.Add;
+        s.Diff.Del = diff.Del;
+        s.Diff.Changes.Clear();
+        foreach (var c in diff.Changes)
+        {
+            s.Diff.Changes.Add(new FileChangeVm
+            {
+                Kind = c.Kind switch
+                {
+                    "A" => FileChangeKind.Added,
+                    "D" => FileChangeKind.Deleted,
+                    _ => FileChangeKind.Modified,
+                },
+                Path = c.Path, Add = c.Add, Del = c.Del,
+            });
         }
-        catch { /* best-effort */ }
+        // Defer the persist to a Background-priority dispatch. The Database wraps a single
+        // SqliteConnection that we keep on the UI thread, so we can't move the write to a
+        // worker thread without serialising access. Lowering the priority instead means a
+        // burst of concurrent ApplyDiff calls (post-turn or fan-out at load) yields to
+        // rendering before flushing the cached totals.
+        var id = s.Id;
+        var files = diff.Files;
+        var add = diff.Add;
+        var del = diff.Del;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => _db.UpdateSessionDiff(id, files, add, del),
+            Avalonia.Threading.DispatcherPriority.Background);
     }
 
     public void UpdateClaudeSessionId(SessionVm s, string claudeSessionId)
