@@ -219,7 +219,7 @@
                 DragDrop.AllowDrop="True">
             <StackPanel Spacing="8">
                 <TextBox x:Name="ComposerBox"
-                         Text="{Binding ComposerDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Text="{Binding ActiveSession.ComposerDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, FallbackValue=''}"
                          PlaceholderText="Continue the session…"
                          FontSize="13.5"
                          BorderThickness="0"
@@ -241,8 +241,8 @@
                     </TextBox.Resources>
                 </TextBox>
 
-                <ItemsControl ItemsSource="{Binding ComposerAttachments}"
-                              IsVisible="{Binding HasComposerAttachments}">
+                <ItemsControl ItemsSource="{Binding ActiveSession.ComposerAttachments}"
+                              IsVisible="{Binding ActiveSession.HasComposerAttachments, FallbackValue=False}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal" />
@@ -295,7 +295,7 @@
                                VerticalAlignment="Center" Margin="0,0,10,0"
                                IsVisible="{Binding !ActiveSession.IsBusy, FallbackValue=True}" />
                     <Button Grid.Column="5" Content="Send" Click="OnComposerSend"
-                            IsEnabled="{Binding CanSend}"
+                            IsEnabled="{Binding ActiveSession.CanSend, FallbackValue=False}"
                             IsVisible="{Binding !ActiveSession.IsBusy, FallbackValue=True}"
                             Padding="12,5" FontSize="12" FontWeight="SemiBold"
                             Background="{Binding Tokens.Text}" Foreground="{Binding Tokens.Bg}"
