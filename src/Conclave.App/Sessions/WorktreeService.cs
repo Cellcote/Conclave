@@ -180,9 +180,11 @@ public static class WorktreeService
     {
         // --force because the worktree may have uncommitted changes; a user-initiated delete
         // is an intentional discard. Swallow errors from the remove step because we still
-        // want to attempt the branch delete even if the worktree is already gone.
+        // want to attempt the branch delete even if the worktree is already gone. The `--`
+        // separator on `branch -D` ensures a hypothetical leading-dash branch name (any
+        // legacy row predating BranchNameValidator) doesn't get reparsed as a flag.
         Run(repoPath, "worktree", "remove", "--force", worktreePath);
-        Run(repoPath, "branch", "-D", branchName);
+        Run(repoPath, "branch", "-D", "--", branchName);
     }
 
     public readonly record struct FusionAddSpec(
