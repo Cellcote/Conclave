@@ -186,6 +186,8 @@ public sealed class SessionVm : Views.Observable
     public string PlanHeader => Plan.Count == 0
         ? "No plan yet"
         : $"Current plan · {PlanCompletedCount} of {Plan.Count} complete";
+    // Compact "X / Y" used in the right-sidebar TODOS section header.
+    public string PlanSummary => Plan.Count == 0 ? "" : $"{PlanCompletedCount} / {Plan.Count}";
 
     public void ReplacePlan(IEnumerable<PlanItemVm> items)
     {
@@ -195,6 +197,7 @@ public sealed class SessionVm : Views.Observable
         Notify(nameof(PlanCompletedCount));
         Notify(nameof(PlanProgress));
         Notify(nameof(PlanHeader));
+        Notify(nameof(PlanSummary));
     }
 
     // Structured session log: lifecycle events, informational stream events, errors.
