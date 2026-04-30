@@ -61,6 +61,13 @@ Or build a native binary:
 dotnet publish src/Conclave.App -c Release
 ```
 
+On macOS, wrap the publish output in a proper `.app` bundle (so the icon
+shows up in Finder and the Dock):
+
+```sh
+scripts/build-mac-app.sh
+```
+
 ## Status
 
 Active development. The shell, embedded terminal, and per-session plumbing

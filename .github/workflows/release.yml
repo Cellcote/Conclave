@@ -55,6 +55,7 @@ jobs:
           fi
 
       - name: Publish (NativeAOT, self-contained)
+        if: matrix.pkg != 'dmg'
         shell: bash
         run: |
           dotnet publish src/Conclave.App \
@@ -73,41 +74,21 @@ jobs:
           "ARTIFACT=$name" | Out-File -Append $env:GITHUB_ENV
 
       # ---------- macOS ----------
+      # Both publish and bundle live in scripts/build-mac-app.sh so the locally
+      # built .app matches what we ship.
       - name: Package (macOS .app + .dmg)
         if: matrix.pkg == 'dmg'
         shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          APP="Conclave.app"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp -R publish/. "$APP/Contents/MacOS/"
-          cp assets/icon.icns "$APP/Contents/Resources/icon.icns"
-          chmod +x "$APP/Contents/MacOS/Conclave.App"
-
-          cat > "$APP/Contents/Info.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleName</key><string>Conclave</string>
-            <key>CFBundleDisplayName</key><string>Conclave</string>
-            <key>CFBundleIdentifier</key><string>com.cellcote.conclave</string>
-            <key>CFBundleVersion</key><string>${VERSION}</string>
-            <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-            <key>CFBundleExecutable</key><string>Conclave.App</string>
-            <key>CFBundleIconFile</key><string>icon</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>LSMinimumSystemVersion</key><string>11.0</string>
-            <key>NSHighResolutionCapable</key><true/>
-          </dict>
-          </plist>
-          EOF
+          scripts/build-mac-app.sh ${{ matrix.rid }}
 
           NAME="Conclave-${VERSION}-${{ matrix.rid }}.dmg"
           # Stage the .app + Applications symlink so the DMG offers drag-to-install.
           STAGE="$(mktemp -d)/dmg"
           mkdir -p "$STAGE"
-          cp -R "$APP" "$STAGE/"
+          cp -R Conclave.app "$STAGE/"
           ln -s /Applications "$STAGE/Applications"
           hdiutil create -volname "Conclave" -srcfolder "$STAGE" -ov -format UDZO "$NAME"
           echo "ARTIFACT=$NAME" >> "$GITHUB_ENV"
