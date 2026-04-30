@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conclave — a desktop home for your Claude Code sessions</title>
-<meta name="description" content="Run many Claude Code sessions at once, each in its own git worktree. macOS, Linux, and Windows.">
+<meta name="description" content="Run many Claude Code sessions at once, each in its own git worktree. Bundle multiple repos into a fusion project and run a single session across all of them. macOS, Linux, and Windows.">
 <link rel="icon" type="image/png" href="logo.png">
 <style>
   :root {
@@ -40,7 +40,33 @@
   header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; }
   header img { width: 64px; height: 64px; }
   h1 { font-size: 36px; margin: 0; letter-spacing: -0.02em; }
-  .tagline { font-size: 18px; color: var(--muted); margin: 0 0 40px; }
+  .tagline { font-size: 18px; color: var(--muted); margin: 0 0 24px; }
+
+  .features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 40px;
+    display: grid;
+    gap: 8px;
+    color: var(--fg);
+    font-size: 15px;
+  }
+  .features li { padding-left: 20px; position: relative; }
+  .features li::before {
+    content: "›";
+    position: absolute;
+    left: 4px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .features strong { color: var(--fg); }
+  .features code {
+    background: var(--card);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+  }
 
   .primary-download {
     background: var(--card);
@@ -148,6 +174,13 @@
   </header>
 
   <p class="tagline">A desktop home for your Claude Code sessions — many at once, each in its own git worktree.</p>
+
+  <ul class="features">
+    <li><strong>Parallel sessions in one window</strong> — grouped by project, filtered by status, with live updates from every agent.</li>
+    <li><strong>A worktree per session</strong> — branches never collide and you never have to stash.</li>
+    <li><strong>Fusion projects</strong> — bundle multiple repos behind one project and run a single session across all of them, with a worktree on a shared branch in every member repo.</li>
+    <li><strong>Plan, transcript, logs, and PR card</strong> — Claude's <code>TodoWrite</code> as a real checklist, plus the linked GitHub PR alongside the session.</li>
+  </ul>
 
   <div id="primary" class="primary-download">
     <div class="label">Download</div>
