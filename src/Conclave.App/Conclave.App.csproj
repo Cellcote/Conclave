@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../assets/icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- NativeAOT: real native binary on `dotnet publish`. The flag also turns on
          the IL trim and AOT-compatibility analyzers in regular dotnet build, so
@@ -27,5 +28,12 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
     <PackageReference Include="Porta.Pty" Version="1.0.7" />
+  </ItemGroup>
+
+  <!-- App icon embedded as an Avalonia resource so MainWindow can load it via
+       avares://Conclave.App/Assets/icon.png. The PNG works cross-platform;
+       the .ico above is only consumed by the Windows PE metadata. -->
+  <ItemGroup>
+    <AvaloniaResource Include="../../assets/icon-256.png" Link="Assets/icon.png" />
   </ItemGroup>
 </Project>

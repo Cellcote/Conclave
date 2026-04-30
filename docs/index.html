@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conclave — a desktop home for your Claude Code sessions</title>
+<meta name="description" content="Run many Claude Code sessions at once, each in its own git worktree. macOS, Linux, and Windows.">
+<link rel="icon" type="image/png" href="logo.png">
+<style>
+  :root {
+    --bg: #faf7f2;
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #b85c3a;
+    --accent-fg: #faf7f2;
+    --card: #ffffff;
+    --border: #e6e1d8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1816;
+      --fg: #f0ece4;
+      --muted: #9a958c;
+      --accent: #d97a55;
+      --accent-fg: #1a1816;
+      --card: #232120;
+      --border: #34302c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; }
+  header img { width: 64px; height: 64px; }
+  h1 { font-size: 36px; margin: 0; letter-spacing: -0.02em; }
+  .tagline { font-size: 18px; color: var(--muted); margin: 0 0 40px; }
+
+  .primary-download {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .primary-download .label {
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .primary-download .platform {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-fg);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn.secondary {
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--border);
+  }
+  .meta { font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .meta a { color: var(--muted); }
+
+  details {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: " ›"; color: var(--muted); }
+  details[open] summary::after { content: " ⌄"; }
+  .download-list {
+    margin-top: 16px;
+    display: grid;
+    gap: 8px;
+  }
+  .download-list a {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .download-list a:hover { background: var(--bg); }
+  .download-list .file { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+
+  .install-notes {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .install-notes h3 { color: var(--fg); font-size: 14px; margin: 0 0 8px; }
+  .install-notes code {
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+  }
+
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 48px; }
+  footer a { color: var(--muted); }
+
+  .loading { color: var(--muted); font-style: italic; }
+  .error { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="logo.png" alt="">
+    <h1>Conclave</h1>
+  </header>
+
+  <p class="tagline">A desktop home for your Claude Code sessions — many at once, each in its own git worktree.</p>
+
+  <div id="primary" class="primary-download">
+    <div class="label">Download</div>
+    <div class="platform loading" id="primary-platform">Detecting your platform…</div>
+    <div id="primary-buttons"></div>
+    <div class="meta" id="primary-meta"></div>
+  </div>
+
+  <div class="install-notes" id="install-notes" hidden>
+    <h3 id="install-notes-title"></h3>
+    <div id="install-notes-body"></div>
+  </div>
+
+  <details>
+    <summary>All platforms &amp; architectures</summary>
+    <div class="download-list" id="all-downloads">
+      <span class="loading">Loading…</span>
+    </div>
+  </details>
+
+  <footer>
+    <a href="https://github.com/Cellcote/Conclave">Source on GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/Cellcote/Conclave/releases">All releases</a>
+    &nbsp;·&nbsp;
+    MIT licensed
+  </footer>
+</main>
+
+<script>
+  const REPO = "Cellcote/Conclave";
+
+  // Map a release asset filename to a human label + install hint key.
+  function classify(name) {
+    const lc = name.toLowerCase();
+    if (lc.includes("osx-arm64") && lc.endsWith(".dmg")) return { os: "macos", arch: "arm64", label: "macOS (Apple Silicon)" };
+    if (lc.includes("osx-x64")   && lc.endsWith(".dmg")) return { os: "macos", arch: "x64",   label: "macOS (Intel)" };
+    if (lc.includes("win-x64")   && lc.endsWith(".zip")) return { os: "windows", arch: "x64", label: "Windows (x64)" };
+    if (lc.includes("linux-x64") && lc.endsWith(".appimage")) return { os: "linux", arch: "x64", label: "Linux AppImage (x64)" };
+    if (lc.includes("linux-x64") && lc.endsWith(".tar.gz"))   return { os: "linux", arch: "x64", label: "Linux tarball (x64)" };
+    return null;
+  }
+
+  function detectOS() {
+    const ua = navigator.userAgent;
+    const platform = navigator.platform || "";
+    if (/Mac/i.test(platform) || /Mac OS X/i.test(ua)) {
+      // Apple Silicon detection is unreliable from JS; default to arm64 (most
+      // new Macs since 2020) and let the "all platforms" list cover Intel.
+      return { os: "macos", arch: "arm64" };
+    }
+    if (/Win/i.test(platform)) return { os: "windows", arch: "x64" };
+    if (/Linux|X11/i.test(ua)) return { os: "linux", arch: "x64" };
+    return null;
+  }
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+    return (n / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  const INSTALL_NOTES = {
+    macos: {
+      title: "First-run on macOS",
+      body: `<p>Builds are unsigned. Right-click <code>Conclave.app</code> in Finder and choose <strong>Open</strong> — once. After that it launches normally.</p>`,
+    },
+    windows: {
+      title: "First-run on Windows",
+      body: `<p>SmartScreen will warn that the publisher isn't verified. Click <strong>More info</strong> → <strong>Run anyway</strong>.</p>`,
+    },
+    linux: {
+      title: "Running on Linux",
+      body: `<p>For the AppImage: <code>chmod +x Conclave-*.AppImage &amp;&amp; ./Conclave-*.AppImage</code>.</p>
+             <p>For the tarball: extract and run <code>./Conclave.App</code> from inside.</p>`,
+    },
+  };
+
+  async function load() {
+    const detected = detectOS();
+    let release;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      release = await res.json();
+    } catch (e) {
+      document.getElementById("primary-platform").textContent = "No releases yet";
+      document.getElementById("primary-platform").classList.remove("loading");
+      document.getElementById("all-downloads").innerHTML =
+        `<span class="error">Couldn't reach the GitHub API. <a href="https://github.com/${REPO}/releases">Open the releases page</a>.</span>`;
+      return;
+    }
+
+    const assets = (release.assets || [])
+      .map(a => ({ ...a, info: classify(a.name) }))
+      .filter(a => a.info);
+
+    // Primary card: prefer the detected OS+arch; otherwise show "pick yours below".
+    const primaryEl = document.getElementById("primary-platform");
+    const buttonsEl = document.getElementById("primary-buttons");
+    const metaEl = document.getElementById("primary-meta");
+
+    if (detected) {
+      const matches = assets.filter(a => a.info.os === detected.os && a.info.arch === detected.arch);
+      if (matches.length) {
+        // Use the first match's label for the heading (works because both linux
+        // formats share an OS label distinguishable enough in the button text).
+        primaryEl.textContent = INSTALL_NOTES[detected.os] ? `For ${matches[0].info.label.split(" (")[0]}` : matches[0].info.label;
+        primaryEl.classList.remove("loading");
+        buttonsEl.innerHTML = matches
+          .map((a, i) =>
+            `<a class="btn ${i > 0 ? "secondary" : ""}" href="${a.browser_download_url}" style="${i > 0 ? "margin-left:8px" : ""}">
+               Download ${a.name.endsWith(".AppImage") ? "AppImage" : a.name.endsWith(".tar.gz") ? "tarball" : a.info.label.split(" (")[0]}
+             </a>`)
+          .join("");
+        metaEl.innerHTML =
+          `${release.tag_name} · released ${new Date(release.published_at).toLocaleDateString()} · `
+          + `<a href="${release.html_url}">release notes</a>`;
+
+        const note = INSTALL_NOTES[detected.os];
+        if (note) {
+          document.getElementById("install-notes").hidden = false;
+          document.getElementById("install-notes-title").textContent = note.title;
+          document.getElementById("install-notes-body").innerHTML = note.body;
+        }
+      } else {
+        primaryEl.textContent = "No build for your platform yet";
+        primaryEl.classList.remove("loading");
+        metaEl.innerHTML = `<a href="${release.html_url}">See ${release.tag_name} release</a>`;
+      }
+    } else {
+      primaryEl.textContent = "Pick your platform below";
+      primaryEl.classList.remove("loading");
+      metaEl.innerHTML = `${release.tag_name} · <a href="${release.html_url}">release notes</a>`;
+    }
+
+    // Full list.
+    const order = ["macos", "windows", "linux"];
+    assets.sort((a, b) => order.indexOf(a.info.os) - order.indexOf(b.info.os));
+    document.getElementById("all-downloads").innerHTML = assets
+      .map(a => `
+        <a href="${a.browser_download_url}">
+          <span>${a.info.label}${a.name.endsWith(".AppImage") ? " — AppImage" : a.name.endsWith(".tar.gz") ? " — tarball" : ""}</span>
+          <span class="file">${a.name} · ${fmtBytes(a.size)}</span>
+        </a>`)
+      .join("");
+  }
+
+  load();
+</script>
+</body>
+</html>
