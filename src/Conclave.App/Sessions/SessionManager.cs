@@ -222,7 +222,9 @@ public sealed class SessionManager : IDisposable
                         "D" => FileChangeKind.Deleted,
                         _ => FileChangeKind.Modified,
                     },
-                    Path = c.Path, Add = c.Add, Del = c.Del,
+                    Path = c.Path,
+                    Add = c.Add,
+                    Del = c.Del,
                 });
             }
             _db.UpdateSessionDiff(s.Id, diff.Files, diff.Add, diff.Del);

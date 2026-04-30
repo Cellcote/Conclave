@@ -223,8 +223,8 @@ public sealed class ClaudeService
                 }
                 break;
 
-            // content_block_start / stop / message_delta / message_stop: no-op. The final
-            // `assistant` event carries authoritative state.
+                // content_block_start / stop / message_delta / message_stop: no-op. The final
+                // `assistant` event carries authoritative state.
         }
     }
 
