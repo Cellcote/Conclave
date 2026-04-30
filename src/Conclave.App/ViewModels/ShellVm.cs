@@ -315,7 +315,7 @@ public sealed class ShellVm : Views.Observable
         foreach (var p in Manager.Projects)
             foreach (var s in p.Sessions)
                 if (s.IsVisibleInTree) { ActiveSession = s; goto selected; }
-        selected:;
+    selected:;
     }
 
     private void HookSession(SessionVm s) => s.PropertyChanged += OnSessionPropertyChanged;
