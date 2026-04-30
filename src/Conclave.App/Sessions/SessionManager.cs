@@ -235,7 +235,18 @@ public sealed class SessionManager : IDisposable
                 Path = c.Path, Add = c.Add, Del = c.Del,
             });
         }
-        _db.UpdateSessionDiff(s.Id, diff.Files, diff.Add, diff.Del);
+        // Defer the persist to a Background-priority dispatch. The Database wraps a single
+        // SqliteConnection that we keep on the UI thread, so we can't move the write to a
+        // worker thread without serialising access. Lowering the priority instead means a
+        // burst of concurrent ApplyDiff calls (post-turn or fan-out at load) yields to
+        // rendering before flushing the cached totals.
+        var id = s.Id;
+        var files = diff.Files;
+        var add = diff.Add;
+        var del = diff.Del;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => _db.UpdateSessionDiff(id, files, add, del),
+            Avalonia.Threading.DispatcherPriority.Background);
     }
 
     public void UpdateClaudeSessionId(SessionVm s, string claudeSessionId)
