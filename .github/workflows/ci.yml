@@ -28,7 +28,35 @@ jobs:
         run: dotnet restore Conclave.slnx
 
       - name: Build
-        run: dotnet build Conclave.slnx -c Release --no-restore
+        run: dotnet build Conclave.slnx -c Release --no-restore -p:TreatWarningsAsErrors=true
+
+  aot:
+    name: AOT publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      # NativeAOT toolchain — same prerequisites release.yml uses.
+      - name: Install Linux AOT prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Catches IL2026/IL3050 etc. — trim and AOT-compat warnings only fire from
+      # the ILC linker at publish time, so a regular `dotnet build` won't surface
+      # them. Linux is sufficient: the analyzers are RID-independent.
+      - name: Publish (NativeAOT, warnings as errors)
+        run: dotnet publish src/Conclave.App -c Release -r linux-x64 -p:TreatWarningsAsErrors=true
 
   format:
     name: Format
