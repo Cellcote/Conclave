@@ -8,17 +8,15 @@ namespace Conclave.App.Claude;
 public sealed class ClaudeCapabilities
 {
     public string? Version { get; }
-    public string? BinaryPath { get; }
     public bool Available => !string.IsNullOrEmpty(Version);
 
     // --fork-session was added to Claude Code in 2.x. Conservative gate so the menu item
     // hides on older builds where the flag would error out.
     public bool SupportsForkSession => AtLeast(Version, "2.0.0");
 
-    private ClaudeCapabilities(string? version, string? path)
+    private ClaudeCapabilities(string? version)
     {
         Version = version;
-        BinaryPath = path;
     }
 
     public static ClaudeCapabilities Detect()
@@ -35,24 +33,24 @@ public sealed class ClaudeCapabilities
             psi.ArgumentList.Add("--version");
 
             using var p = Process.Start(psi);
-            if (p is null) return new ClaudeCapabilities(null, null);
+            if (p is null) return new ClaudeCapabilities(null);
 
             var stdout = p.StandardOutput.ReadToEnd().Trim();
             // "claude --version" doesn't reliably return in some environments; cap the wait.
             if (!p.WaitForExit(2500))
             {
                 try { p.Kill(); } catch { }
-                return new ClaudeCapabilities(null, null);
+                return new ClaudeCapabilities(null);
             }
-            if (p.ExitCode != 0) return new ClaudeCapabilities(null, null);
+            if (p.ExitCode != 0) return new ClaudeCapabilities(null);
 
             // Output looks like "2.1.119 (Claude Code)" — keep the leading version token.
             var version = stdout.Split(' ', 2)[0];
-            return new ClaudeCapabilities(version, null);
+            return new ClaudeCapabilities(version);
         }
         catch
         {
-            return new ClaudeCapabilities(null, null);
+            return new ClaudeCapabilities(null);
         }
     }
 

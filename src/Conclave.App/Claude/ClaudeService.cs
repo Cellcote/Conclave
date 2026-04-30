@@ -52,7 +52,9 @@ public sealed class ClaudeService
 
         // Live assistant messages built from stream_event deltas, keyed by claude's message id.
         // The final `assistant` event is still authoritative; we reuse the live VM on match.
-        var liveByMessageId = new Dictionary<string, TranscriptMessageVm>();
+        // Each entry carries a StringBuilder so a long response with hundreds of small text
+        // deltas doesn't quadratically copy the growing message via `live.Content += ...`.
+        var liveByMessageId = new Dictionary<string, LiveAssistantState>();
 
         // Capture once at turn start — any clear that happens mid-stream (or the next turn's
         // clear) should not affect this in-flight invocation's args.
@@ -70,6 +72,7 @@ public sealed class ClaudeService
                 includePartialMessages: true,
                 forkFromSessionId: session.PendingForkFromClaudeSessionId,
                 appendSystemPrompt: preamble,
+                additionalDirs: session.AdditionalDirs.Count > 0 ? session.AdditionalDirs : null,
                 ct: linked.Token))
             {
                 Handle(session, ev, toolsById, messageByToolId, liveByMessageId);
@@ -117,12 +120,23 @@ public sealed class ClaudeService
             TimestampUtc = DateTime.UtcNow,
         });
 
+    // Per-live-message scratch state. Buffer accumulates text_delta payloads cheaply;
+    // VM.Content is only refreshed periodically (see HandleStreamDelta) so a long response
+    // with thousands of deltas doesn't allocate a full new string per delta.
+    private sealed class LiveAssistantState
+    {
+        public TranscriptMessageVm Vm { get; }
+        public StringBuilder Buffer { get; } = new();
+        public DateTime LastFlushUtc;
+        public LiveAssistantState(TranscriptMessageVm vm) => Vm = vm;
+    }
+
     private void Handle(
         SessionVm session,
         StreamJsonEvent ev,
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
-        Dictionary<string, TranscriptMessageVm> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId)
     {
         switch (ev)
         {
@@ -190,14 +204,24 @@ public sealed class ClaudeService
         }
     }
 
+    // Min interval between Content flushes for a streaming assistant message. ~30Hz feels
+    // smooth for streaming text but spares us a full-string ToString allocation per delta —
+    // for long responses (hundreds–thousands of small deltas) that adds up.
+    private static readonly TimeSpan ContentFlushInterval = TimeSpan.FromMilliseconds(33);
+
     private void HandleStreamDelta(
         SessionVm session,
         StreamDeltaEvent delta,
-        Dictionary<string, TranscriptMessageVm> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId)
     {
         switch (delta.EventType)
         {
             case "message_start":
+                // Append a live VM to the transcript so deltas stream into a visible bubble,
+                // but do NOT persist yet — at this point Content is empty and Tools are
+                // empty. If the turn is killed mid-stream we'd leave a blank row in the DB
+                // that paints as an empty assistant bubble on reload. The AssistantEvent
+                // path inserts the row once content/tools are real.
                 if (!string.IsNullOrEmpty(delta.MessageId) && !liveByMessageId.ContainsKey(delta.MessageId))
                 {
                     var live = new TranscriptMessageVm
@@ -208,8 +232,7 @@ public sealed class ClaudeService
                         Time = Now(),
                     };
                     session.AppendTranscript(live);
-                    _manager.PersistMessage(session, live);
-                    liveByMessageId[delta.MessageId] = live;
+                    liveByMessageId[delta.MessageId] = new LiveAssistantState(live);
                 }
                 break;
 
@@ -218,13 +241,37 @@ public sealed class ClaudeService
                 // partial JSON and we'd rather wait for the final assistant event for those.
                 if (delta.DeltaType == "text_delta" && !string.IsNullOrEmpty(delta.DeltaText))
                 {
-                    var live = liveByMessageId.Values.LastOrDefault();
-                    if (live is not null) live.Content += delta.DeltaText;
+                    var state = liveByMessageId.Values.LastOrDefault();
+                    if (state is not null)
+                    {
+                        state.Buffer.Append(delta.DeltaText);
+                        var now = DateTime.UtcNow;
+                        if (now - state.LastFlushUtc >= ContentFlushInterval)
+                        {
+                            state.Vm.Content = state.Buffer.ToString();
+                            state.LastFlushUtc = now;
+                        }
+                    }
                 }
                 break;
 
-                // content_block_start / stop / message_delta / message_stop: no-op. The final
-                // `assistant` event carries authoritative state.
+            case "content_block_stop":
+                // Flush any pending text accumulated since the last throttled update so the
+                // bubble shows the full block before the next one starts (or the AssistantEvent
+                // overwrites with the authoritative content). Unconditionally assign — the
+                // Set guard in Observable filters no-op writes when content matches.
+                {
+                    var state = liveByMessageId.Values.LastOrDefault();
+                    if (state is not null && state.Buffer.Length > 0)
+                    {
+                        state.Vm.Content = state.Buffer.ToString();
+                        state.LastFlushUtc = DateTime.UtcNow;
+                    }
+                }
+                break;
+
+            // message_delta / message_stop: no-op. The final `assistant` event carries
+            // authoritative state.
         }
     }
 
@@ -242,7 +289,7 @@ public sealed class ClaudeService
         AssistantEvent asst,
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
-        Dictionary<string, TranscriptMessageVm> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId)
     {
         var buf = new StringBuilder();
 
@@ -250,10 +297,10 @@ public sealed class ClaudeService
         // it as the target (avoid duplicating a row). Otherwise create fresh.
         TranscriptMessageVm message;
         bool isLiveMessage = !string.IsNullOrEmpty(asst.MessageId)
-            && liveByMessageId.TryGetValue(asst.MessageId, out var liveRef);
+            && liveByMessageId.ContainsKey(asst.MessageId);
         if (isLiveMessage)
         {
-            message = liveByMessageId[asst.MessageId];
+            message = liveByMessageId[asst.MessageId].Vm;
             liveByMessageId.Remove(asst.MessageId);
         }
         else
@@ -289,6 +336,17 @@ public sealed class ClaudeService
                     toolsById[tu.Id] = vm;
                     messageByToolId[tu.Id] = message;
                     if (tu.Name == "TodoWrite") UpdatePlanFromTodoWrite(session, tu.InputJson);
+                    // AskUserQuestion + ExitPlanMode are interactive — claude is waiting on
+                    // the user. EnterPlanMode is just claude announcing it switched modes,
+                    // not a question, so it stays out of this branch. Fire both a native
+                    // notification (so the user is pulled back to the window) and a session
+                    // log warning (so the persistent record explains why the session is stuck
+                    // and how to recover).
+                    if (tu.Name is "AskUserQuestion" or "ExitPlanMode")
+                    {
+                        _manager.Notifications?.NotifyQuestionPending(session.Title, vm.Target);
+                        WarnUnhandledInteractiveTool(session, tu.Name);
+                    }
                     break;
             }
         }
@@ -306,22 +364,31 @@ public sealed class ClaudeService
         // text and no tools. Only add the message if it has something to show.
         if (!string.IsNullOrEmpty(message.Content) || message.Tools.Count > 0)
         {
-            if (isLiveMessage)
-            {
-                // Live path: row already inserted on message_start; update it.
-                _manager.UpdateMessageTools(message);
-                _manager.UpdateMessageClaudeUuid(message);
-            }
-            else
+            if (!isLiveMessage)
             {
                 session.AppendTranscript(message);
-                _manager.PersistMessage(session, message);
             }
+            // Insert lazily — message_start no longer persists. The VM is already in the
+            // transcript (live path appended on message_start; fresh path appended just
+            // above), so the only DB operation needed is the insert.
+            _manager.PersistMessage(session, message);
         }
 
         if (hasToolUse)
             _manager.UpdateStatus(session, SessionStatus.RunningTool);
     }
+
+    // AskUserQuestion and ExitPlanMode are interactive tools that the Agent SDK normally
+    // satisfies via a `canUseTool` callback. Our CLI-based integration has no such hook —
+    // claude emits the tool_use, the user sees it in the transcript, and then the model
+    // sits there forever waiting for a tool_result we cannot supply. Surface a warning in
+    // the session log so the user understands why the session looks frozen and what to do.
+    // Tracked under "Permission handling — option 1 shipped" in PHASE_4.md.
+    private static void WarnUnhandledInteractiveTool(SessionVm session, string toolName) =>
+        Log(session, LogLevel.Wrn,
+            $"{toolName} invoked but Conclave's CLI integration can't answer it. " +
+            "Claude will wait for a response that won't arrive — cancel the turn and rephrase, " +
+            "or set permission mode to 'Full access' so the model doesn't gate on it.");
 
     private void UpdatePlanFromTodoWrite(SessionVm session, string inputJson)
     {

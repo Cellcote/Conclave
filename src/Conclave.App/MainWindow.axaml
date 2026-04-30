@@ -5,6 +5,7 @@
         x:Class="Conclave.App.MainWindow"
         x:DataType="vm:ShellVm"
         Title="Conclave"
+        Icon="/Assets/icon.png"
         Width="1320" Height="820" MinWidth="640" MinHeight="480"
         Background="{Binding Tokens.Bg}">
     <Panel>
@@ -61,6 +62,7 @@
                               IsVisible="{Binding HasActiveSession}" />
         </Grid>
         <shell:NewSessionModal />
+        <shell:NewFusionProjectModal />
         <shell:PreferencesModal />
         <shell:Toast />
     </Panel>

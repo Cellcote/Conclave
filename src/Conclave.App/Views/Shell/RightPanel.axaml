@@ -109,6 +109,61 @@
                     </Grid>
                 </StackPanel>
 
+                <!-- Todos section: live mirror of claude's TodoWrite tool. Read-only —
+                     IsHitTestVisible=False on the whole block so the checkboxes can't be
+                     toggled by the user. Claude rewrites the list wholesale on each
+                     TodoWrite call (see SessionVm.ReplacePlan). -->
+                <StackPanel IsVisible="{Binding ActiveSession.HasPlan, FallbackValue=False}"
+                            IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                        <TextBlock Text="TODOS ·" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5" />
+                        <TextBlock Text="{Binding ActiveSession.PlanSummary}" FontSize="11"
+                                   FontWeight="SemiBold" Foreground="{Binding Tokens.TextDim}"
+                                   LetterSpacing="1.5" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding ActiveSession.Plan}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="7" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PlanItemVm">
+                                <Grid ColumnDefinitions="14,*" ColumnSpacing="9">
+                                    <!-- Checkbox-style indicator: empty (pending) /
+                                         accent-bordered (in progress) / filled with ✓
+                                         (completed). Only one Border/TextBlock is
+                                         visible at a time. -->
+                                    <Panel Grid.Column="0" Width="13" Height="13"
+                                           VerticalAlignment="Top" Margin="0,2,0,0">
+                                        <Border IsVisible="{Binding IsPending}"
+                                                BorderBrush="{Binding Tokens.BorderHi}"
+                                                BorderThickness="1.5"
+                                                CornerRadius="3" Background="Transparent" />
+                                        <Border IsVisible="{Binding IsInProgress}"
+                                                BorderBrush="{Binding Tokens.AccentBrush}"
+                                                BorderThickness="1.5"
+                                                CornerRadius="3"
+                                                Background="{Binding Tokens.AccentDim}" />
+                                        <Border IsVisible="{Binding IsCompleted}"
+                                                Background="{Binding Tokens.AccentBrush}"
+                                                CornerRadius="3" />
+                                        <TextBlock IsVisible="{Binding IsCompleted}" Text="✓"
+                                                   FontSize="9" FontWeight="Bold"
+                                                   Foreground="{Binding Tokens.AccentFg}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Panel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Content}"
+                                               FontSize="12" TextWrapping="Wrap"
+                                               LineHeight="17"
+                                               VerticalAlignment="Top"
+                                               Foreground="{Binding Tokens.Text}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
                 <!-- Pull request section -->
                 <StackPanel IsVisible="{Binding ActiveSession.HasPr}">
                     <TextBlock Text="PULL REQUEST" FontSize="11" FontWeight="SemiBold"

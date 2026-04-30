@@ -46,18 +46,4 @@ public static class OklchConverter
             : 1.055 * Math.Pow(v, 1.0 / 2.4) - 0.055;
         return (byte)Math.Round(Math.Clamp(s, 0.0, 1.0) * 255);
     }
-
-    // Mix two colors in sRGB space. Good enough for the "accent @ 14% on bg" tints used for
-    // accentDim / accentMid in the design. Proper oklch mixing would preserve perceived lightness
-    // better but for subtle tints the visual difference is invisible.
-    public static Color MixSrgb(Color a, Color b, double t)
-    {
-        t = Math.Clamp(t, 0.0, 1.0);
-        byte Lerp(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
-        return Color.FromArgb(
-            Lerp(a.A, b.A),
-            Lerp(a.R, b.R),
-            Lerp(a.G, b.G),
-            Lerp(a.B, b.B));
-    }
 }

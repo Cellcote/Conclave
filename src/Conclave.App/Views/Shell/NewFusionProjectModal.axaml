@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.NewFusionProjectModal"
+             x:DataType="vm:ShellVm">
+    <Panel IsVisible="{Binding IsNewFusionOpen}" IsHitTestVisible="{Binding IsNewFusionOpen}"
+           KeyDown="OnModalKeyDown"
+           Focusable="True">
+        <Border Background="#A6000000" PointerPressed="OnBackdropPressed" />
+
+        <Border Width="560" MaxHeight="640"
+                VerticalAlignment="Center" HorizontalAlignment="Center"
+                Background="{Binding Tokens.Bg}"
+                BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadLgCorner}"
+                Padding="24"
+                DataContext="{Binding NewFusion}"
+                x:DataType="vm:NewFusionProjectVm">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="60" OffsetY="20" Opacity="0.5" Color="Black" />
+            </Border.Effect>
+
+            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="16">
+                <TextBlock Grid.Row="0" Text="New fusion project"
+                           FontSize="16" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.Text}" />
+
+                <StackPanel Grid.Row="1">
+                    <TextBlock Text="NAME" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5"
+                               Margin="0,0,0,6" />
+                    <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="App + Docs"
+                             FontSize="12.5" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="2" Text="MEMBERS" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5" />
+
+                <Border Grid.Row="3" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                        CornerRadius="{Binding Tokens.RadSmCorner}"
+                        Background="{Binding Tokens.Panel}">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" Padding="8,4">
+                        <ItemsControl ItemsSource="{Binding Picks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FusionMemberPickVm">
+                                    <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,4">
+                                        <RadioButton Grid.Column="0" GroupName="FusionPrimary"
+                                                     IsChecked="{Binding IsPrimary, Mode=TwoWay}"
+                                                     Click="OnPrimaryChanged"
+                                                     Margin="0,0,8,0"
+                                                     ToolTip.Tip="Primary (cwd)" />
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding IsSecondary, Mode=TwoWay}"
+                                                  Click="OnSecondaryChanged"
+                                                  IsEnabled="{Binding !IsPrimary}"
+                                                  Margin="0,0,8,0"
+                                                  ToolTip.Tip="Include via --add-dir" />
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontSize="13"
+                                                       Foreground="{Binding Tokens.Text}" />
+                                            <TextBlock Text="{Binding Path}" FontSize="11.5"
+                                                       FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                       Foreground="{Binding Tokens.TextDim}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <Border Grid.Row="4" IsVisible="{Binding HasError}"
+                        BorderBrush="{Binding Tokens.Err}" BorderThickness="1"
+                        CornerRadius="{Binding Tokens.RadSmCorner}"
+                        Padding="10,8">
+                    <TextBlock Text="{Binding ErrorMessage}" FontSize="12"
+                               TextWrapping="Wrap"
+                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                               Foreground="{Binding Tokens.Err}" />
+                </Border>
+
+                <Grid Grid.Row="5" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4,0,0">
+                    <TextBlock Text="⌘⏎ create" FontSize="11"
+                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                               Foreground="{Binding Tokens.TextMute}" VerticalAlignment="Center" />
+                    <Button Grid.Column="2" Content="Cancel" Click="OnCancel"
+                            Background="Transparent" BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                            CornerRadius="{Binding Tokens.RadSmCorner}" Padding="12,5"
+                            Foreground="{Binding Tokens.Text}" FontSize="12" FontWeight="Medium"
+                            Margin="0,0,8,0" />
+                    <Button Grid.Column="3" Content="Create fusion" Click="OnCreate"
+                            Background="{Binding Tokens.Text}" BorderThickness="0"
+                            CornerRadius="{Binding Tokens.RadSmCorner}" Padding="12,5"
+                            Foreground="{Binding Tokens.Bg}" FontSize="12" FontWeight="SemiBold"
+                            IsEnabled="{Binding CanCreate}" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Panel>
+</UserControl>

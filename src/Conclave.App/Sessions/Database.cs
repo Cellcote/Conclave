@@ -82,10 +82,43 @@ public sealed class Database : IDisposable
             ALTER TABLE messages ADD COLUMN claude_uuid TEXT;
             ALTER TABLE sessions ADD COLUMN pending_preamble TEXT;
             """),
+        (10, """
+            ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'repo';
+            CREATE TABLE project_members (
+              fusion_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+              member_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+              ordinal   INTEGER NOT NULL,
+              PRIMARY KEY (fusion_id, member_id)
+            );
+            CREATE INDEX ix_project_members_fusion ON project_members(fusion_id, ordinal);
+            CREATE TABLE session_worktrees (
+              session_id        TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+              member_project_id TEXT NOT NULL,
+              worktree_path     TEXT NOT NULL,
+              branch_name       TEXT NOT NULL,
+              base_branch       TEXT NOT NULL,
+              ordinal           INTEGER NOT NULL,
+              PRIMARY KEY (session_id, member_project_id)
+            );
+            CREATE INDEX ix_session_worktrees_session ON session_worktrees(session_id, ordinal);
+            """),
+        (11, """
+            -- Snapshot of the member repo's path at session-creation time. Stored on the
+            -- session row so DeleteSession can still find and remove the worktree on disk
+            -- after the underlying member project is deleted (the FK on member_project_id
+            -- is intentionally absent so a deleted project doesn't cascade-orphan the
+            -- session_worktrees row before we get a chance to clean it up).
+            ALTER TABLE session_worktrees ADD COLUMN repo_path TEXT NOT NULL DEFAULT '';
+            UPDATE session_worktrees
+            SET repo_path = (
+              SELECT p.path FROM projects p WHERE p.id = session_worktrees.member_project_id
+            )
+            WHERE repo_path = '';
+            """),
     };
 
     // Explicit column lists so ordinal mapping in Read*() stays stable.
-    private const string ProjectColumns = "id, name, path, default_branch, created_at";
+    private const string ProjectColumns = "id, name, path, default_branch, created_at, kind";
     private const string SessionColumns =
         "id, project_id, name, branch_name, worktree_path, created_at, last_active_at, " +
         "base_branch, model, started_utc, status, unread_count, " +
@@ -212,13 +245,15 @@ public sealed class Database : IDisposable
         Name: r.GetString(1),
         Path: r.GetString(2),
         DefaultBranch: r.GetString(3),
-        CreatedAt: r.GetInt64(4));
+        CreatedAt: r.GetInt64(4),
+        Kind: r.GetString(5));
 
     public void InsertProject(Project p) => Exec(
-        "INSERT INTO projects (id, name, path, default_branch, created_at) " +
-        "VALUES ($id, $name, $path, $defaultBranch, $createdAt);",
+        "INSERT INTO projects (id, name, path, default_branch, created_at, kind) " +
+        "VALUES ($id, $name, $path, $defaultBranch, $createdAt, $kind);",
         ("$id", p.Id), ("$name", p.Name), ("$path", p.Path),
-        ("$defaultBranch", p.DefaultBranch), ("$createdAt", p.CreatedAt));
+        ("$defaultBranch", p.DefaultBranch), ("$createdAt", p.CreatedAt),
+        ("$kind", p.Kind));
 
     public void UpdateProjectName(string id, string name) => Exec(
         "UPDATE projects SET name = $name WHERE id = $id;",
@@ -326,10 +361,6 @@ public sealed class Database : IDisposable
         ("$id", id), ("$prNumber", (object?)prNumber), ("$prState", (object?)prState),
         ("$prMergedAt", (object?)prMergedAt));
 
-    public void UpdateSessionUnread(string id, int unread) => Exec(
-        "UPDATE sessions SET unread_count = $unread WHERE id = $id;",
-        ("$id", id), ("$unread", unread));
-
     public void UpdateClaudeSessionId(string id, string? claudeSessionId) => Exec(
         "UPDATE sessions SET claude_session_id = $cid WHERE id = $id;",
         ("$id", id), ("$cid", (object?)claudeSessionId));
@@ -427,6 +458,55 @@ public sealed class Database : IDisposable
         "INSERT INTO settings (key, value) VALUES ($key, $value) " +
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
         ("$key", key), ("$value", value));
+
+    // --- Project members (fusion projects) ---
+
+    // Returns members in ordinal order. Ordinal 0 is the primary; the rest are secondaries.
+    public IReadOnlyList<ProjectMember> GetMembers(string fusionId)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT fusion_id, member_id, ordinal FROM project_members " +
+            "WHERE fusion_id = $fid ORDER BY ordinal ASC;";
+        cmd.Parameters.AddWithValue("$fid", fusionId);
+        var list = new List<ProjectMember>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new ProjectMember(r.GetString(0), r.GetString(1), r.GetInt32(2)));
+        return list;
+    }
+
+    public void InsertMember(ProjectMember m) => Exec(
+        "INSERT INTO project_members (fusion_id, member_id, ordinal) " +
+        "VALUES ($fid, $mid, $ord);",
+        ("$fid", m.FusionId), ("$mid", m.MemberId), ("$ord", m.Ordinal));
+
+    // --- Session worktrees (one row per member repo for a fusion session) ---
+
+    public IReadOnlyList<SessionWorktree> GetSessionWorktrees(string sessionId)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT session_id, member_project_id, repo_path, worktree_path, branch_name, base_branch, ordinal " +
+            "FROM session_worktrees WHERE session_id = $sid ORDER BY ordinal ASC;";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var list = new List<SessionWorktree>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new SessionWorktree(
+                r.GetString(0), r.GetString(1), r.GetString(2),
+                r.GetString(3), r.GetString(4), r.GetString(5), r.GetInt32(6)));
+        return list;
+    }
+
+    public void InsertSessionWorktree(SessionWorktree w) => Exec(
+        "INSERT INTO session_worktrees " +
+        "(session_id, member_project_id, repo_path, worktree_path, branch_name, base_branch, ordinal) " +
+        "VALUES ($sid, $mid, $repo, $wt, $br, $base, $ord);",
+        ("$sid", w.SessionId), ("$mid", w.MemberProjectId),
+        ("$repo", w.RepoPath),
+        ("$wt", w.WorktreePath), ("$br", w.BranchName),
+        ("$base", w.BaseBranch), ("$ord", w.Ordinal));
 
     public void Dispose() => _conn.Dispose();
 }

@@ -180,9 +180,67 @@ public static class WorktreeService
     {
         // --force because the worktree may have uncommitted changes; a user-initiated delete
         // is an intentional discard. Swallow errors from the remove step because we still
-        // want to attempt the branch delete even if the worktree is already gone.
+        // want to attempt the branch delete even if the worktree is already gone. The `--`
+        // separator on `branch -D` ensures a hypothetical leading-dash branch name (any
+        // legacy row predating BranchNameValidator) doesn't get reparsed as a flag.
         Run(repoPath, "worktree", "remove", "--force", worktreePath);
-        Run(repoPath, "branch", "-D", branchName);
+        Run(repoPath, "branch", "-D", "--", branchName);
+    }
+
+    public readonly record struct FusionAddSpec(
+        string RepoPath, string WorktreePath, string BranchName, string BaseBranch);
+
+    // Adds worktrees in every member repo for a fusion session. On the first failure, removes
+    // any worktrees that were already created so the user isn't left with half a fusion (and
+    // a colliding branch name in some repos but not others).
+    public static void AddWorktreesForFusion(IReadOnlyList<FusionAddSpec> specs)
+    {
+        var done = new List<FusionAddSpec>(specs.Count);
+        try
+        {
+            foreach (var spec in specs)
+            {
+                AddWorktree(spec.RepoPath, spec.WorktreePath, spec.BranchName, spec.BaseBranch);
+                done.Add(spec);
+            }
+        }
+        catch
+        {
+            foreach (var d in done)
+            {
+                try { RemoveWorktree(d.RepoPath, d.WorktreePath, d.BranchName); }
+                catch { /* best-effort rollback */ }
+            }
+            throw;
+        }
+    }
+
+    public readonly record struct FusionForkSpec(
+        string RepoPath, string SourceWorktreePath, string NewWorktreePath, string NewBranchName);
+
+    // Forks worktrees in every member repo for a fusion session. Same rollback contract as
+    // AddWorktreesForFusion: if any single ForkWorktree call throws, the previously-forked
+    // worktrees are removed before rethrowing.
+    public static void ForkWorktreesForFusion(IReadOnlyList<FusionForkSpec> specs)
+    {
+        var done = new List<FusionForkSpec>(specs.Count);
+        try
+        {
+            foreach (var spec in specs)
+            {
+                ForkWorktree(spec.RepoPath, spec.SourceWorktreePath, spec.NewWorktreePath, spec.NewBranchName);
+                done.Add(spec);
+            }
+        }
+        catch
+        {
+            foreach (var d in done)
+            {
+                try { RemoveWorktree(d.RepoPath, d.NewWorktreePath, d.NewBranchName); }
+                catch { /* best-effort rollback */ }
+            }
+            throw;
+        }
     }
 
     private static (int Code, string Stdout, string Stderr) Run(string cwd, params string[] args)

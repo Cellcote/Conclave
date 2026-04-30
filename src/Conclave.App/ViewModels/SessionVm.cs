@@ -13,9 +13,12 @@ public sealed class SessionVm : Views.Observable
     public string Branch { get; init; } = "";
     public string BaseBranch { get; init; } = "main";
     public string Model { get; init; } = "";
+
+    // Secondary worktree paths for fusion sessions, passed to claude as `--add-dir <path>`.
+    // Empty for repo-kind sessions.
+    public IReadOnlyList<string> AdditionalDirs { get; init; } = Array.Empty<string>();
     public DateTime StartedUtc { get; init; } = DateTime.UtcNow;
     public int Pid { get; init; }
-    public string LastActivity { get; init; } = "";
     public DiffStatVm Diff { get; init; } = new();
 
     private PullRequestVm? _pr;
@@ -186,6 +189,8 @@ public sealed class SessionVm : Views.Observable
     public string PlanHeader => Plan.Count == 0
         ? "No plan yet"
         : $"Current plan · {PlanCompletedCount} of {Plan.Count} complete";
+    // Compact "X / Y" used in the right-sidebar TODOS section header.
+    public string PlanSummary => Plan.Count == 0 ? "" : $"{PlanCompletedCount} / {Plan.Count}";
 
     public void ReplacePlan(IEnumerable<PlanItemVm> items)
     {
@@ -195,6 +200,7 @@ public sealed class SessionVm : Views.Observable
         Notify(nameof(PlanCompletedCount));
         Notify(nameof(PlanProgress));
         Notify(nameof(PlanHeader));
+        Notify(nameof(PlanSummary));
     }
 
     // Structured session log: lifecycle events, informational stream events, errors.

@@ -5,11 +5,8 @@ namespace Conclave.App.ViewModels;
 
 public sealed class NewSessionVm : Views.Observable
 {
-    private static readonly string[] ModelOptions = { "Haiku 4.5", "Sonnet 4.5", "Opus 4" };
-
     public Tokens Tokens { get; }
     public ObservableCollection<ProjectVm> Projects { get; }
-    public IReadOnlyList<string> Models => ModelOptions;
 
     public NewSessionVm(Tokens tokens, ObservableCollection<ProjectVm> projects)
     {
@@ -92,6 +89,8 @@ public sealed class NewSessionVm : Views.Observable
         {
             if (_project is null || string.IsNullOrWhiteSpace(_branch)) return "—";
             var slug = DeriveSlug(_branch);
+            if (_project.IsFusion)
+                return $"{_project.MemberIds.Count} worktrees · {slug}";
             return $"worktrees/{_project.Id[..8]}/{slug}";
         }
     }

@@ -12,15 +12,12 @@ public abstract record StreamJsonEvent
 // First event in any run: contains the claude-side session UUID we pass to --resume later.
 public sealed record SystemInitEvent : StreamJsonEvent
 {
-    public string? Model { get; init; }
-    public string? Cwd { get; init; }
 }
 
 // An assistant turn (may be followed by more if claude did tool calls and then more thinking).
 public sealed record AssistantEvent : StreamJsonEvent
 {
     public string MessageId { get; init; } = "";
-    public string Model { get; init; } = "";
     public IReadOnlyList<ContentBlock> Content { get; init; } = Array.Empty<ContentBlock>();
     public string? StopReason { get; init; }
 }

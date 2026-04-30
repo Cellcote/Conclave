@@ -29,10 +29,6 @@ public sealed class TerminalBuffer
 
     public void MarkAllDirty() => _dirtyRows.SetAll(true);
     public void ClearDirty() => _dirtyRows.SetAll(false);
-    public void MarkDirty(int row)
-    {
-        if ((uint)row < (uint)Rows) _dirtyRows[row] = true;
-    }
 
     public void Resize(int cols, int rows)
     {

@@ -27,12 +27,11 @@ public sealed class FileChangeVm
 public sealed class DiffStatVm : Views.Observable
 {
     private int _files, _add, _del;
-    public int Files { get => _files; set { if (Set(ref _files, value)) { Notify(nameof(HasChanges)); Notify(nameof(Summary)); } } }
-    public int Add { get => _add; set { if (Set(ref _add, value)) Notify(nameof(Summary)); } }
-    public int Del { get => _del; set { if (Set(ref _del, value)) Notify(nameof(Summary)); } }
+    public int Files { get => _files; set { if (Set(ref _files, value)) Notify(nameof(HasChanges)); } }
+    public int Add { get => _add; set => Set(ref _add, value); }
+    public int Del { get => _del; set => Set(ref _del, value); }
 
     public ObservableCollection<FileChangeVm> Changes { get; } = new();
 
     public bool HasChanges => _files > 0;
-    public string Summary => $"+{_add} / −{_del}";
 }
