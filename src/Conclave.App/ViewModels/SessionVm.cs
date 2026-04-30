@@ -81,6 +81,7 @@ public sealed class SessionVm : Views.Observable
                 Notify(nameof(StatusLabel));
                 Notify(nameof(StatusPulses));
                 Notify(nameof(IsBusy));
+                Notify(nameof(CanSend));
             }
         }
     }
@@ -213,6 +214,33 @@ public sealed class SessionVm : Views.Observable
         while (Logs.Count > LogCap) Logs.RemoveAt(0);
     }
 
+    // --- Composer (per-session draft state) ---
+    // Lives on the session — not the shell — so switching sessions preserves each one's
+    // in-progress input. In-memory only; not persisted across app restarts.
+
+    private string _composerDraft = "";
+    public string ComposerDraft
+    {
+        get => _composerDraft;
+        set { if (Set(ref _composerDraft, value)) Notify(nameof(CanSend)); }
+    }
+
+    public ObservableCollection<AttachmentVm> ComposerAttachments { get; } = new();
+    public bool HasComposerAttachments => ComposerAttachments.Count > 0;
+
+    public bool CanSend =>
+        !IsBusy && (!string.IsNullOrWhiteSpace(_composerDraft) || ComposerAttachments.Count > 0);
+
+    public void AddAttachment(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        foreach (var existing in ComposerAttachments)
+            if (string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase)) return;
+        ComposerAttachments.Add(new AttachmentVm(Tokens, path));
+    }
+
+    public void RemoveAttachment(AttachmentVm attachment) => ComposerAttachments.Remove(attachment);
+
     public SessionVm(Tokens tokens)
     {
         Tokens = tokens;
@@ -226,6 +254,11 @@ public sealed class SessionVm : Views.Observable
                 case nameof(DiffStatVm.Add): Notify(nameof(AddText)); break;
                 case nameof(DiffStatVm.Del): Notify(nameof(DelText)); break;
             }
+        };
+        ComposerAttachments.CollectionChanged += (_, _) =>
+        {
+            Notify(nameof(HasComposerAttachments));
+            Notify(nameof(CanSend));
         };
     }
 }

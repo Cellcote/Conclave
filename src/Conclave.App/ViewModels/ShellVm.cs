@@ -26,27 +26,16 @@ public sealed class ShellVm : Views.Observable
             var previous = _activeSession;
             if (Set(ref _activeSession, value))
             {
-                if (previous is not null)
-                {
-                    previous.IsActive = false;
-                    previous.PropertyChanged -= OnActiveSessionPropertyChanged;
-                }
+                if (previous is not null) previous.IsActive = false;
                 if (value is not null)
                 {
                     value.IsActive = true;
-                    value.PropertyChanged += OnActiveSessionPropertyChanged;
                     Manager.LoadTranscriptIfNeeded(value);
                 }
                 Notify(nameof(HasActiveSession));
                 Notify(nameof(ActiveProjectName));
-                Notify(nameof(CanSend));
             }
         }
-    }
-
-    private void OnActiveSessionPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(SessionVm.IsBusy)) Notify(nameof(CanSend));
     }
 
     public bool HasActiveSession => _activeSession is not null;
@@ -229,31 +218,13 @@ public sealed class ShellVm : Views.Observable
     public void DismissToast() => ToastMessage = null;
 
     // --- Composer ---
+    // Composer state (draft + attachments) lives on SessionVm so it isn't shared
+    // across sessions when the user switches. These methods just route to the
+    // active session's composer.
 
-    private string _composerDraft = "";
-    public string ComposerDraft
-    {
-        get => _composerDraft;
-        set { if (Set(ref _composerDraft, value)) Notify(nameof(CanSend)); }
-    }
+    public void AddAttachment(string path) => _activeSession?.AddAttachment(path);
 
-    // Files dropped into the composer. Surfaced as pills below the input; cleared on Send.
-    public ObservableCollection<AttachmentVm> ComposerAttachments { get; } = new();
-    public bool HasComposerAttachments => ComposerAttachments.Count > 0;
-
-    public bool CanSend =>
-        _activeSession is { IsBusy: false }
-        && (!string.IsNullOrWhiteSpace(_composerDraft) || ComposerAttachments.Count > 0);
-
-    public void AddAttachment(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return;
-        foreach (var existing in ComposerAttachments)
-            if (string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase)) return;
-        ComposerAttachments.Add(new AttachmentVm(Tokens, path));
-    }
-
-    public void RemoveAttachment(AttachmentVm attachment) => ComposerAttachments.Remove(attachment);
+    public void RemoveAttachment(AttachmentVm attachment) => _activeSession?.RemoveAttachment(attachment);
 
     // Fired when the user hits Send. Whoever wires this (ClaudeService) is responsible
     // for appending the user message, running the turn, and updating transcript + status.
@@ -261,20 +232,19 @@ public sealed class ShellVm : Views.Observable
 
     public async Task SendAsync()
     {
-        if (!CanSend || _activeSession is null) return;
-        var session = _activeSession;
-        var draft = _composerDraft.TrimEnd();
+        if (_activeSession is not { CanSend: true } session) return;
+        var draft = session.ComposerDraft.TrimEnd();
         // The CLI's @-mention syntax inlines file contents; prefix attachments so the
         // model sees them as context before the prompt.
-        if (ComposerAttachments.Count > 0)
+        if (session.ComposerAttachments.Count > 0)
         {
             // Newline-separated: paths may contain spaces, which would otherwise terminate
             // the @-mention at the wrong boundary.
-            var refs = string.Join('\n', ComposerAttachments.Select(a => "@" + a.Path));
+            var refs = string.Join('\n', session.ComposerAttachments.Select(a => "@" + a.Path));
             draft = draft.Length == 0 ? refs : refs + "\n\n" + draft;
-            ComposerAttachments.Clear();
+            session.ComposerAttachments.Clear();
         }
-        ComposerDraft = "";
+        session.ComposerDraft = "";
         var handler = SendRequested;
         if (handler is not null) await handler(session, draft);
     }
@@ -304,12 +274,6 @@ public sealed class ShellVm : Views.Observable
         }
 
         ApplyFilter();
-
-        ComposerAttachments.CollectionChanged += (_, _) =>
-        {
-            Notify(nameof(HasComposerAttachments));
-            Notify(nameof(CanSend));
-        };
 
         // Default selection: first session we find that's currently visible.
         foreach (var p in Manager.Projects)
