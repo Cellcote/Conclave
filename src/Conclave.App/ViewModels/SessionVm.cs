@@ -19,7 +19,6 @@ public sealed class SessionVm : Views.Observable
     public IReadOnlyList<string> AdditionalDirs { get; init; } = Array.Empty<string>();
     public DateTime StartedUtc { get; init; } = DateTime.UtcNow;
     public int Pid { get; init; }
-    public string LastActivity { get; init; } = "";
     public DiffStatVm Diff { get; init; } = new();
 
     private PullRequestVm? _pr;

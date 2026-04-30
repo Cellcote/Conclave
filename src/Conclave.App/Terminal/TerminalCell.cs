@@ -17,7 +17,4 @@ public struct TerminalCell
     public uint Fg;
     public uint Bg;
     public CellAttrs Attrs;
-
-    public readonly bool HasSameStyle(in TerminalCell other) =>
-        Fg == other.Fg && Bg == other.Bg && Attrs == other.Attrs;
 }

@@ -15,17 +15,12 @@ public sealed class PtySession : IAsyncDisposable
     private readonly Task _readTask;
 
     public ChannelReader<byte[]> Output => _channel.Reader;
-    public event Action<int>? ProcessExited;
 
     private PtySession(IPtyConnection pty, Channel<byte[]> channel)
     {
         _pty = pty;
         _channel = channel;
-        _pty.ProcessExited += (_, e) =>
-        {
-            _channel.Writer.TryComplete();
-            ProcessExited?.Invoke(e.ExitCode);
-        };
+        _pty.ProcessExited += (_, _) => _channel.Writer.TryComplete();
         _readTask = Task.Run(ReadLoop);
     }
 

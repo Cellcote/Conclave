@@ -12,14 +12,12 @@ public sealed class GlyphCache
     private readonly double _scale;
     private readonly Dictionary<uint, ushort> _glyphByCodepoint = new(256);
 
-    public Typeface Typeface { get; }
     public double CellWidth { get; }
     public double CellHeight { get; }
     public double Baseline { get; }
 
     public GlyphCache(Typeface typeface, double fontSize)
     {
-        Typeface = typeface;
         _glyphTypeface = typeface.GlyphTypeface;
         _fontSize = fontSize;
 
