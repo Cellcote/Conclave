@@ -466,6 +466,12 @@ public sealed class SessionManager : IDisposable
         var previous = s.Status;
         _db.UpdateSessionStatus(s.Id, status.ToString());
         s.Status = status;
+        // IsStalled is an overlay on Working/RunningTool — once the session leaves that
+        // family (user clicked Stop, ResultEvent landed, an exception flipped us to Error),
+        // the flag is meaningless and would otherwise pin the session in "Needs attention"
+        // forever and keep the stall banner visible on an idle session.
+        if (status is not (SessionStatus.Working or SessionStatus.RunningTool) && s.IsStalled)
+            s.IsStalled = false;
         // Only "claude is done" transitions bump the session — intermediate Working /
         // RunningTool flips during a turn must not reorder the sidebar.
         if (status is SessionStatus.Idle or SessionStatus.Error)
