@@ -340,7 +340,13 @@ public sealed class ShellVm : Views.Observable
                 s.IsVisibleInTree = visible;
                 if (visible) anyVisible = true;
             }
-            p.IsVisibleInTree = anyVisible;
+            // Empty projects must still surface so the user can rename / delete them.
+            // Hide them only when a status filter is narrowing the tree to specific sessions
+            // (e.g. "Running"), or when a search query is set and the project name does not match.
+            bool emptyProjectMatch = p.Sessions.Count == 0
+                && (selected is null || selected.Label == "All sessions")
+                && (string.IsNullOrEmpty(query) || projectMatches);
+            p.IsVisibleInTree = anyVisible || emptyProjectMatch;
             // A collapsed project would otherwise hide its matches behind the chevron;
             // force it open so search/filter results are actually visible.
             if (filterIsActive && anyVisible) p.IsExpanded = true;

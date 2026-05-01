@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -137,6 +138,25 @@ public partial class Sidebar : UserControl
     {
         if (sender is MenuItem mi && mi.DataContext is ProjectVm p)
             p.IsEditing = true;
+    }
+
+    private void OnDeleteProjectMenu(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem mi && mi.DataContext is ProjectVm p && DataContext is ShellVm shell)
+            DeleteProject(shell, p);
+    }
+
+    private static void DeleteProject(ShellVm shell, ProjectVm p)
+    {
+        try
+        {
+            // Drop the active session pointer if it lives in the project we're about to nuke,
+            // otherwise the right pane keeps a stale VM reference after the cascade.
+            if (shell.ActiveSession is { } s && p.Sessions.Contains(s))
+                shell.ActiveSession = null;
+            shell.Manager.DeleteProject(p);
+        }
+        catch (Exception ex) { shell.ShowError($"Delete project failed: {ex.Message}"); }
     }
 
     private void OnNewSessionForProject(object? sender, PointerPressedEventArgs e)

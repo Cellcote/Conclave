@@ -193,6 +193,23 @@ public static class WorktreeService
         // legacy row predating BranchNameValidator) doesn't get reparsed as a flag.
         Run(repoPath, "worktree", "remove", "--force", worktreePath);
         Run(repoPath, "branch", "-D", "--", branchName);
+        // Filesystem fallback: if `git worktree add` previously half-failed (e.g. Windows
+        // long-path checkout failure), git never registered the worktree, so `worktree
+        // remove` exits non-zero and the directory is left on disk. Force-clean it here.
+        if (!string.IsNullOrEmpty(worktreePath) && Directory.Exists(worktreePath))
+        {
+            try { Directory.Delete(worktreePath, recursive: true); }
+            catch { /* best-effort */ }
+        }
+    }
+
+    // Drops stale `.git/worktrees/<slug>/` bookkeeping entries whose working dirs no longer
+    // exist. Used after a project-wide cleanup to clear half-created worktrees that
+    // RemoveWorktree could not reach via `git worktree remove`.
+    public static void PruneWorktrees(string repoPath)
+    {
+        if (string.IsNullOrEmpty(repoPath) || !Directory.Exists(repoPath)) return;
+        Run(repoPath, "worktree", "prune");
     }
 
     public readonly record struct FusionAddSpec(
