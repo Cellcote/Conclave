@@ -148,15 +148,21 @@ public partial class Sidebar : UserControl
 
     private static void DeleteProject(ShellVm shell, ProjectVm p)
     {
+        // Snapshot ActiveSession so we can restore it if the delete throws — otherwise a
+        // failed delete (e.g. a locked worktree file) leaves the right pane blank even
+        // though the project and its sessions survive intact.
+        var previousActiveSession = shell.ActiveSession;
         try
         {
-            // Drop the active session pointer if it lives in the project we're about to nuke,
-            // otherwise the right pane keeps a stale VM reference after the cascade.
-            if (shell.ActiveSession is { } s && p.Sessions.Contains(s))
+            if (previousActiveSession is { } s && p.Sessions.Contains(s))
                 shell.ActiveSession = null;
             shell.Manager.DeleteProject(p);
         }
-        catch (Exception ex) { shell.ShowError($"Delete project failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            shell.ActiveSession = previousActiveSession;
+            shell.ShowError($"Delete project failed: {ex.Message}");
+        }
     }
 
     private void OnNewSessionForProject(object? sender, PointerPressedEventArgs e)
