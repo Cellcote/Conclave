@@ -3,6 +3,50 @@
              xmlns:vm="clr-namespace:Conclave.App.ViewModels"
              x:Class="Conclave.App.Views.Shell.Sidebar"
              x:DataType="vm:ShellVm">
+    <UserControl.Styles>
+        <!-- Sidebar row hover/selected backgrounds. Bound to the row's DataContext
+             (FilterVm / SessionVm / ProjectVm), all of which expose Tokens. Setters
+             override the local Background, so the row Borders no longer bind it. -->
+        <Style Selector="Border.filter-row">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.filter-row:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.Panel2}" />
+        </Style>
+        <Style Selector="Border.filter-row.selected">
+            <Setter Property="Background" Value="{Binding Tokens.Panel}" />
+        </Style>
+        <Style Selector="Border.filter-row.selected:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.Panel}" />
+        </Style>
+
+        <Style Selector="Border.session-row">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.session-row:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.Panel2}" />
+        </Style>
+        <Style Selector="Border.session-row.active">
+            <Setter Property="Background" Value="{Binding Tokens.Panel}" />
+        </Style>
+        <Style Selector="Border.session-row.active:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.Panel}" />
+        </Style>
+
+        <Style Selector="Border.project-header">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.project-header:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.Panel2}" />
+        </Style>
+
+        <Style Selector="Border.icon-btn">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.icon-btn:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.PanelHi}" />
+        </Style>
+    </UserControl.Styles>
     <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*">
         <!-- Search pill (real input). The TextBox is borderless and lays inside the styled
              pill Border. ⌘P glyph hides while there's a query so the field doesn't compete. -->
@@ -36,8 +80,9 @@
                 <ItemsControl ItemsSource="{Binding Filters}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:FilterVm">
-                            <Border Padding="10,6" CornerRadius="{Binding Tokens.RadSmCorner}"
-                                    Background="{Binding BackgroundBrush}"
+                            <Border Classes="filter-row" Classes.selected="{Binding IsSelected}"
+                                    Padding="10,6" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                    Cursor="Hand"
                                     PointerPressed="OnFilterPressed">
                                 <Grid ColumnDefinitions="14,*,Auto">
                                     <Panel Grid.Column="0" Width="8" Height="8"
@@ -70,18 +115,21 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ProjectVm">
                             <StackPanel Margin="0,6,0,0" IsVisible="{Binding IsVisibleInTree}">
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="10,6"
-                                      Background="Transparent" Cursor="Hand"
-                                      PointerPressed="OnProjectHeaderPressed">
-                                    <Grid.ContextMenu>
+                                <Border Classes="project-header"
+                                        Padding="4,2" CornerRadius="{Binding Tokens.RadSmCorner}"
+                                        Cursor="Hand"
+                                        PointerPressed="OnProjectHeaderPressed">
+                                    <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Rename" Click="OnRenameProjectMenu" />
                                             <MenuItem Header="Delete" Click="OnDeleteProjectMenu" />
                                         </ContextMenu>
-                                    </Grid.ContextMenu>
-                                    <TextBlock Text="{Binding ChevronGlyph}" FontSize="9"
+                                    </Border.ContextMenu>
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                    <TextBlock Text="{Binding ChevronGlyph}" FontSize="13"
                                                Foreground="{Binding Tokens.TextDim}"
-                                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                                               VerticalAlignment="Center"
+                                               Margin="2,4,8,4" Width="14" TextAlignment="Center" />
                                     <TextBlock Grid.Column="1" Text="{Binding Name}"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{Binding Tokens.Text}" VerticalAlignment="Center"
@@ -97,21 +145,25 @@
                                                FontSize="10.5" Foreground="{Binding Tokens.TextMute}"
                                                VerticalAlignment="Center"
                                                FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" />
-                                    <Border Grid.Column="3" Margin="6,0,0,0" Padding="2,0"
+                                    <Border Grid.Column="3" Classes="icon-btn"
+                                            Margin="6,0,0,0" Padding="6,2"
+                                            CornerRadius="{Binding Tokens.RadXsCorner}"
                                             Cursor="Hand" ToolTip.Tip="New session in project"
                                             PointerPressed="OnNewSessionForProject">
                                         <TextBlock Text="+" FontSize="13"
                                                    Foreground="{Binding Tokens.TextDim}"
                                                    VerticalAlignment="Center" />
                                     </Border>
-                                </Grid>
+                                    </Grid>
+                                </Border>
                                 <ItemsControl ItemsSource="{Binding Sessions}"
                                               IsVisible="{Binding IsExpanded}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:SessionVm">
-                                            <Border Margin="0,1" Padding="10,7,10,7"
+                                            <Border Classes="session-row" Classes.active="{Binding IsActive}"
+                                                    Margin="0,1" Padding="10,7,10,7"
                                                     CornerRadius="{Binding Tokens.RadSmCorner}"
-                                                    Background="{Binding BackgroundBrush}"
+                                                    Cursor="Hand"
                                                     IsVisible="{Binding IsVisibleInTree}"
                                                     PointerPressed="OnSessionPressed">
                                                 <Border.ContextMenu>

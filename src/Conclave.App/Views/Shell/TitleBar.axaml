@@ -4,6 +4,22 @@
              x:Class="Conclave.App.Views.Shell.TitleBar"
              x:DataType="vm:ShellVm"
              Height="38">
+    <UserControl.Styles>
+        <!-- Subtle hover for the gear (transparent → panel) and primary action
+             (slight dim via opacity, since the bg is already the brand color). -->
+        <Style Selector="Border.icon-btn">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.icon-btn:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.Panel}" />
+        </Style>
+        <Style Selector="Border.primary-btn">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Border.primary-btn:pointerover">
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+    </UserControl.Styles>
     <Border x:Name="DragHandle"
             BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
             Background="{Binding Tokens.Bg}"
@@ -57,7 +73,8 @@
             </Border>
 
             <!-- Preferences (gear) -->
-            <Border Grid.Column="8" Width="26" Height="22"
+            <Border Grid.Column="8" Classes="icon-btn"
+                    Width="26" Height="22"
                     CornerRadius="{Binding Tokens.RadSmCorner}"
                     BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
                     VerticalAlignment="Center" Margin="0,0,8,0"
@@ -69,7 +86,8 @@
             </Border>
 
             <!-- New session (primary) -->
-            <Border Grid.Column="9" Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
+            <Border Grid.Column="9" Classes="primary-btn"
+                    Padding="9,3" CornerRadius="{Binding Tokens.RadSmCorner}"
                     Background="{Binding Tokens.Text}" VerticalAlignment="Center" Margin="0,0,10,0"
                     PointerPressed="OnNewSession" Cursor="Hand">
                 <TextBlock Text="New session" FontSize="11.5" FontWeight="Medium"
