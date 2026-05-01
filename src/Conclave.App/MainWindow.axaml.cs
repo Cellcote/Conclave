@@ -4,6 +4,7 @@ using Conclave.App.Claude;
 using Conclave.App.Design;
 using Conclave.App.Sessions;
 using Conclave.App.ViewModels;
+using Conclave.App.Views.Shell;
 
 namespace Conclave.App;
 
@@ -29,6 +30,15 @@ public partial class MainWindow : Window
     // the splitter + right-panel columns.
     private ColumnDefinition RightSplit => ShellGrid.ColumnDefinitions[3];
     private ColumnDefinition RightCol => ShellGrid.ColumnDefinitions[4];
+
+    // Lazy-instantiated modal user-controls. Each is created on first open and kept
+    // around for the life of the window so subsequent opens are instantaneous (the
+    // first-open cost is what we cared about; tearing down on close would just push
+    // it onto the next open). DataContext inherits from MainWindow → ShellVm.
+    private NewSessionModal? _newSessionModal;
+    private NewFusionProjectModal? _newFusionModal;
+    private PreferencesModal? _preferencesModal;
+    private AboutModal? _aboutModal;
 
     public MainWindow()
     {
@@ -67,12 +77,12 @@ public partial class MainWindow : Window
         _manager.Permissions = _permissions;
 
         var claudeService = new ClaudeService(_manager);
-        // Empty capabilities up front — XAML bindings paint with Available=false. The
-        // probe runs on the thread pool and re-fires PropertyChanged when `claude
-        // --version` returns. Used to be synchronous and waited up to 2.5s on the UI
-        // thread, which on Windows (npm/node shim, AV scan) was a big chunk of the
-        // pre-paint time.
-        var capabilities = new ClaudeCapabilities();
+        // Seed the title-bar capabilities from the cached version in the settings table so
+        // the very first paint already shows the previous launch's claude version. The
+        // background probe re-validates and writes back if the user upgraded the CLI
+        // between launches. Pre-cache (or first-ever launch) the seed is empty and the
+        // title bar binding paints with Available=false until the probe returns.
+        var capabilities = new ClaudeCapabilities(_manager.Db);
         capabilities.BeginProbe();
         _shell = new ShellVm(tokens, _manager, capabilities);
         StartupLog.Mark("MainWindow ctor: ShellVm built");
@@ -107,6 +117,13 @@ public partial class MainWindow : Window
         base.OnLoaded(e);
         ApplyResponsiveLayout(Bounds.Width, _shell?.HasActiveSession ?? false);
         StartupLog.Mark("MainWindow OnLoaded");
+
+        // Now that the first frame has rendered, kick a staggered sweep that refreshes
+        // diff + PR state for every session. BuildSessionVm intentionally skips this on
+        // load — bursting N×2 git/gh subprocesses at startup is the single largest cause
+        // of slow first-paint on Windows where every Process.Start hits the AV scanner.
+        // 75ms between sessions keeps the pipeline busy without monopolising it.
+        _manager?.RefreshAllStaggered(TimeSpan.FromMilliseconds(75));
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -115,6 +132,25 @@ public partial class MainWindow : Window
         // When it's restored, restore the right column to its remembered width.
         if (e.PropertyName == nameof(ShellVm.HasActiveSession))
             ApplyResponsiveLayout(Bounds.Width, _shell?.HasActiveSession ?? false);
+
+        // Lazy-materialise the heavier modals the first time the user opens them. The
+        // modal stays in the visual tree once instantiated so re-opens are immediate;
+        // we just toggle IsVisible via the same binding the modal's XAML already has.
+        if (e.PropertyName == nameof(ShellVm.IsNewSessionOpen) && _shell?.IsNewSessionOpen == true)
+            EnsureModal(ref _newSessionModal);
+        else if (e.PropertyName == nameof(ShellVm.IsNewFusionOpen) && _shell?.IsNewFusionOpen == true)
+            EnsureModal(ref _newFusionModal);
+        else if (e.PropertyName == nameof(ShellVm.IsPreferencesOpen) && _shell?.IsPreferencesOpen == true)
+            EnsureModal(ref _preferencesModal);
+        else if (e.PropertyName == nameof(ShellVm.IsAboutOpen) && _shell?.IsAboutOpen == true)
+            EnsureModal(ref _aboutModal);
+    }
+
+    private void EnsureModal<T>(ref T? slot) where T : Control, new()
+    {
+        if (slot is not null) return;
+        slot = new T();
+        ModalHost.Children.Add(slot);
     }
 
     private void ApplyResponsiveLayout(double windowWidth, bool hasActiveSession)

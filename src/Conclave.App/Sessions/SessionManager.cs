@@ -154,12 +154,49 @@ public sealed class SessionManager : IDisposable
                 Base = s.BaseBranch,
             };
         }
-        // Both refreshes off the UI thread. Diff is two git calls; PR is gated to bound
-        // gh-process concurrency at startup.
-        RefreshDiff(vm);
-        RefreshPr(vm);
-
+        // No per-session refresh here. The DB columns we just hydrated render the sidebar
+        // straight away, and the freshness sweep (RefreshAllStaggered, called by MainWindow
+        // after first paint) re-fetches diff + PR data without bursting N subprocesses
+        // simultaneously at startup. Sessions activated by the user before the sweep
+        // catches them are refreshed eagerly via RefreshOnActivation.
         return vm;
+    }
+
+    // Refresh diff + PR for one session — used when the user picks a session in the sidebar
+    // before the post-startup sweep gets to it. Idempotent against the staggered sweep:
+    // both paths land on RefreshDiff/RefreshPr which already gate their subprocesses.
+    public void RefreshOnActivation(SessionVm s)
+    {
+        RefreshDiff(s);
+        RefreshPr(s);
+    }
+
+    // Walks every session and dispatches RefreshDiff + RefreshPr with a small per-session
+    // delay so we don't fan out N×2 git/gh subprocesses simultaneously at startup. On
+    // Windows each Process.Start carries an AV-scan tax, so a synchronous burst at boot
+    // hurts perceived startup time even though the work runs off the UI thread.
+    //
+    // Cheap to call from the UI thread; everything off-loads to Task.Run.
+    public void RefreshAllStaggered(TimeSpan stagger)
+    {
+        var sessions = Projects.SelectMany(p => p.Sessions).ToArray();
+        if (sessions.Length == 0) return;
+        _ = Task.Run(async () =>
+        {
+            foreach (var s in sessions)
+            {
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    RefreshDiff(s);
+                    RefreshPr(s);
+                });
+                if (stagger > TimeSpan.Zero)
+                {
+                    try { await Task.Delay(stagger); }
+                    catch { /* best-effort */ }
+                }
+            }
+        });
     }
 
     // Refresh PR info for one session from `gh pr view`. Safe no-op if gh isn't installed

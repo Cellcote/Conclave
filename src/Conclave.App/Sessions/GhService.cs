@@ -19,8 +19,12 @@ public static class GhService
     public static PullRequestInfo? TryGetPullRequest(string worktreePath)
     {
         if (string.IsNullOrEmpty(worktreePath) || !Directory.Exists(worktreePath)) return null;
-        if (!GhAvailable()) return null;
 
+        // No `gh --version` preflight: just attempt the call. A missing gh fails the
+        // Process.Start inside Run with a Win32Exception, which we map to (-1, "", "")
+        // and treat as "no PR". The previous probe spawned a fresh gh per session at
+        // startup — on Windows where every Process.Start carries a 50–150ms AV-scan
+        // tax, that doubled the gh fan-out for no signal we actually used.
         var (code, stdout, _) = Run(worktreePath,
             "pr", "view",
             "--json", "number,state,isDraft,headRefName,baseRefName,title,mergedAt");
@@ -59,26 +63,6 @@ public static class GhService
         return ms <= 0 ? null : ms;
     }
 
-    private static bool GhAvailable()
-    {
-        try
-        {
-            var psi = new ProcessStartInfo("gh")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add("--version");
-            using var p = Process.Start(psi);
-            if (p is null) return false;
-            p.WaitForExit(800);
-            return p.HasExited && p.ExitCode == 0;
-        }
-        catch { return false; }
-    }
-
     private static (int Code, string Stdout, string Stderr) Run(string cwd, params string[] args)
     {
         var psi = new ProcessStartInfo("gh")
@@ -91,21 +75,36 @@ public static class GhService
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
 
-        using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException("failed to start gh");
-        var sout = new StringBuilder();
-        var serr = new StringBuilder();
-        proc.OutputDataReceived += (_, e) => { if (e.Data != null) sout.AppendLine(e.Data); };
-        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) serr.AppendLine(e.Data); };
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
-        // Hard cap so a network hang doesn't freeze the UI thread.
-        if (!proc.WaitForExit(5000))
+        Process? proc;
+        try
         {
-            try { proc.Kill(); } catch { }
-            return (-1, sout.ToString(), serr.ToString());
+            proc = Process.Start(psi);
         }
-        return (proc.ExitCode, sout.ToString(), serr.ToString());
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // gh isn't on PATH. This is the "no gh installed" branch — equivalent to a
+            // failed availability check, but without the extra subprocess that the old
+            // GhAvailable() preflight cost us per call.
+            return (-1, "", "");
+        }
+        if (proc is null) return (-1, "", "");
+
+        using (proc)
+        {
+            var sout = new StringBuilder();
+            var serr = new StringBuilder();
+            proc.OutputDataReceived += (_, e) => { if (e.Data != null) sout.AppendLine(e.Data); };
+            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) serr.AppendLine(e.Data); };
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+            // Hard cap so a network hang doesn't freeze the UI thread.
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(); } catch { }
+                return (-1, sout.ToString(), serr.ToString());
+            }
+            return (proc.ExitCode, sout.ToString(), serr.ToString());
+        }
     }
 
     private static string? Str(JsonElement el, string prop) =>

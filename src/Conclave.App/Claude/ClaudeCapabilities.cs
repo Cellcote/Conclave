@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Conclave.App.Sessions;
 using Conclave.App.Views;
 
 namespace Conclave.App.Claude;
@@ -9,10 +10,12 @@ namespace Conclave.App.Claude;
 //
 // The probe runs on a background thread (BeginProbe) — on Windows, `claude` is a
 // node/npm shim that can take >1s to spin up, and we used to block the UI thread
-// waiting for it. The instance starts in an empty state (Available == false) and
-// raises PropertyChanged once the result lands so XAML bindings update in place.
+// waiting for it. The instance is seeded from the SQLite settings cache so the titlebar
+// paints with the previous launch's version immediately; the background probe then
+// re-validates and writes back if the user upgraded the CLI between launches.
 public sealed class ClaudeCapabilities : Observable
 {
+    private readonly Database? _db;
     private string? _version;
     public string? Version
     {
@@ -33,9 +36,20 @@ public sealed class ClaudeCapabilities : Observable
     // hides on older builds where the flag would error out.
     public bool SupportsForkSession => AtLeast(_version, "2.0.0");
 
+    public ClaudeCapabilities() { }
+
+    // Seeded variant: paints the cached version immediately so the titlebar doesn't flash
+    // an "Claude not detected" state on every launch while the background probe runs.
+    public ClaudeCapabilities(Database db)
+    {
+        _db = db;
+        _version = db.GetSetting(SettingsKeys.ClaudeVersion);
+    }
+
     // Kick off `claude --version` on the thread pool. Result is published back to the
     // capabilities object via PropertyChanged; bindings update wherever they sit. Fire
-    // and forget — failures leave Version null, which matches the "not detected" UX.
+    // and forget — failures leave Version unchanged from the cached seed (so a transient
+    // probe failure doesn't blank out the titlebar).
     public void BeginProbe()
     {
         _ = Task.Run(async () =>
@@ -45,7 +59,22 @@ public sealed class ClaudeCapabilities : Observable
             // auto-marshal INotifyPropertyChanged events, so the bound IsVisible /
             // Version controls in TitleBar.axaml + Sidebar.axaml would otherwise be
             // mutated from the thread pool. Same pattern as SessionManager.RefreshPr.
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => Version = version);
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (version is not null && version != _version)
+                {
+                    Version = version;
+                    _db?.SetSetting(SettingsKeys.ClaudeVersion, version);
+                }
+                else if (version is null && _version is null)
+                {
+                    // Probe failed and we have no cached version either — surface the empty state.
+                    Version = null;
+                }
+                // version == _version: nothing to do (cache still valid).
+                // version == null && _version != null: keep the cached value rather than
+                // blanking the titlebar over a transient probe failure.
+            });
             StartupLog.Mark(version is null
                 ? "claude probe complete (not detected)"
                 : $"claude probe complete: {version}");
