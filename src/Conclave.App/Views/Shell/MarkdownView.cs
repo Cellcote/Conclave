@@ -153,8 +153,16 @@ public sealed class MarkdownView : UserControl
         while (n < trimmed.Length && trimmed[n] == '#' && n < 6) n++;
         if (n == 0 || n >= trimmed.Length || trimmed[n] != ' ') return false;
         level = n;
-        // Strip optional trailing '#' run that ATX style allows as a closing marker.
-        text = trimmed[(n + 1)..].TrimEnd().TrimEnd('#').TrimEnd();
+        // CommonMark optional closing '#' run: only stripped when preceded by
+        // whitespace (or when it makes up the entire body), so "## C#" keeps
+        // its trailing '#' but "## Heading ##" does not.
+        var raw = trimmed[(n + 1)..].TrimEnd();
+        int end = raw.Length;
+        while (end > 0 && raw[end - 1] == '#') end--;
+        if (end < raw.Length && (end == 0 || raw[end - 1] == ' ' || raw[end - 1] == '\t'))
+            text = raw[..end].TrimEnd();
+        else
+            text = raw;
         return true;
     }
 
