@@ -357,6 +357,7 @@ public sealed class SessionManager : IDisposable
                     .ToLocalTime().ToString("HH:mm"),
                 Content = row.Content,
                 ClaudeUuid = row.ClaudeUuid,
+                IsAutoResume = row.IsAutoResume,
             };
             if (!string.IsNullOrEmpty(row.ToolsJson))
             {
@@ -380,6 +381,7 @@ public sealed class SessionManager : IDisposable
             CreatedAt = Database.Now(),
             Seq = _db.NextSeq(session.Id),
             ClaudeUuid = msg.ClaudeUuid,
+            IsAutoResume = msg.IsAutoResume,
         });
     }
 
@@ -459,11 +461,17 @@ public sealed class SessionManager : IDisposable
         }
     }
 
-    public void UpdateStatus(SessionVm s, SessionStatus status)
+    public void UpdateStatus(SessionVm s, SessionStatus status, bool suppressNotification = false)
     {
         var previous = s.Status;
         _db.UpdateSessionStatus(s.Id, status.ToString());
         s.Status = status;
+        // IsStalled is an overlay on Working/RunningTool — once the session leaves that
+        // family (user clicked Stop, ResultEvent landed, an exception flipped us to Error),
+        // the flag is meaningless and would otherwise pin the session in "Needs attention"
+        // forever and keep the stall banner visible on an idle session.
+        if (status is not (SessionStatus.Working or SessionStatus.RunningTool) && s.IsStalled)
+            s.IsStalled = false;
         // Only "claude is done" transitions bump the session — intermediate Working /
         // RunningTool flips during a turn must not reorder the sidebar.
         if (status is SessionStatus.Idle or SessionStatus.Error)
@@ -472,7 +480,10 @@ public sealed class SessionManager : IDisposable
             BumpToTop(s);
             // Only notify on a real busy→done transition. App-load resets and session
             // creation also pass through here at Idle but stay Idle — those mustn't fire.
-            if (previous is SessionStatus.Working or SessionStatus.RunningTool)
+            // suppressNotification is set by StallDetectionService on the cancel-half of
+            // an auto-resume so the user doesn't get a "turn complete" toast for what is
+            // really just an internal restart.
+            if (!suppressNotification && previous is SessionStatus.Working or SessionStatus.RunningTool)
                 Notifications?.NotifyTurnComplete(s.Title, status == SessionStatus.Error);
         }
     }

@@ -114,6 +114,10 @@ public sealed class ShellVm : Views.Observable
 
     public AutoCleanupService? AutoCleanup { get; set; }
 
+    // Wired by MainWindow at startup. The Resume button on a stalled session row routes
+    // here so the same orchestration (cancel-then-continue) is used for manual + auto.
+    public StallDetectionService? StallDetection { get; set; }
+
     private bool _isPreferencesOpen;
     public bool IsPreferencesOpen
     {
@@ -187,6 +191,17 @@ public sealed class ShellVm : Views.Observable
             // Push the new value into the running service so the next event respects it
             // without requiring a restart.
             if (Manager.Notifications is { } svc) svc.Enabled = value;
+            Notify();
+        }
+    }
+
+    public bool AutoResumeStalledEnabled
+    {
+        get => SettingsKeys.ReadAutoResumeStalledSessions(Manager.Db);
+        set
+        {
+            if (value == AutoResumeStalledEnabled) return;
+            Manager.Db.SetSetting(SettingsKeys.AutoResumeStalledSessions, value ? "true" : "false");
             Notify();
         }
     }
@@ -292,6 +307,13 @@ public sealed class ShellVm : Views.Observable
         catch (ObjectDisposedException) { /* race: already completed */ }
     }
 
+    // Manual "Resume" button on a stalled session. Same orchestration as auto-resume but
+    // ignores the per-session retry cap — the user explicitly asked.
+    public void ResumeStalledSession(SessionVm session)
+    {
+        if (StallDetection is { } svc) _ = svc.ResumeAsync(session, ignoreRetryCap: true);
+    }
+
     public ShellVm(Tokens tokens, SessionManager manager, ClaudeCapabilities claude)
     {
         Tokens = tokens;
@@ -322,8 +344,8 @@ public sealed class ShellVm : Views.Observable
 
     private void OnSessionPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        // Status changes can move a session in/out of the current filter.
-        if (e.PropertyName == nameof(SessionVm.Status))
+        // Status or IsStalled changes can move a session in/out of the current filter.
+        if (e.PropertyName == nameof(SessionVm.Status) || e.PropertyName == nameof(SessionVm.IsStalled))
         {
             ApplyFilter();
             RecalcFilterCounts();
@@ -392,8 +414,11 @@ public sealed class ShellVm : Views.Observable
         filter?.Label switch
         {
             null or "All sessions" => true,
-            "Running" => s.Status is SessionStatus.Working or SessionStatus.RunningTool,
-            "Needs attention" => s.Status is SessionStatus.Waiting or SessionStatus.Error,
+            "Running" => (s.Status is SessionStatus.Working or SessionStatus.RunningTool) && !s.IsStalled,
+            // IsStalled is an in-memory flag that overlays Working/RunningTool when the
+            // claude stream has been silent past the configured threshold. Treated as
+            // needs-attention so the user has one obvious place to find it.
+            "Needs attention" => s.Status is SessionStatus.Waiting or SessionStatus.Error || s.IsStalled,
             "Idle" => s.Status is SessionStatus.Idle or SessionStatus.Completed,
             _ => true,
         };
@@ -425,6 +450,14 @@ public sealed class ShellVm : Views.Observable
             foreach (var s in p.Sessions)
             {
                 total++;
+                if (s.IsStalled)
+                {
+                    // Stalled sessions are still nominally Working/RunningTool but should
+                    // count under attention, not running, so the badges reflect what the
+                    // sidebar filter would show.
+                    attention++;
+                    continue;
+                }
                 switch (s.Status)
                 {
                     case SessionStatus.Working:

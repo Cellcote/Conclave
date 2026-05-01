@@ -15,13 +15,23 @@ public sealed class ClaudeService
 
     public ClaudeService(SessionManager manager) => _manager = manager;
 
-    public async Task RunTurnAsync(SessionVm session, string prompt, CancellationToken ct = default)
+    public Task RunTurnAsync(SessionVm session, string prompt, CancellationToken ct = default)
+        => RunTurnAsync(session, prompt, isAutoResume: false, ct);
+
+    public async Task RunTurnAsync(SessionVm session, string prompt, bool isAutoResume, CancellationToken ct = default)
     {
         // Per-session cancellation. Combined so either the caller's token or the Cancel
         // button on the SessionVm kills the turn.
         using var internalCts = new CancellationTokenSource();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, internalCts.Token);
         session.CancellationSource = internalCts;
+        // Reset the stall timestamp at turn start so a stalled prior turn doesn't immediately
+        // re-flag this fresh one before any events have had time to arrive. StallDetectionService
+        // also clears IsStalled when it sees a turn enter Working — but stamping here closes
+        // the race where the timer fires between RunTurnAsync's UpdateStatus(Working) and the
+        // first stream event.
+        session.LastStreamEventAt = DateTime.UtcNow;
+        session.IsStalled = false;
 
         // Per-turn permission router. Registered with the shared MCP server so claude
         // can call our permission_prompt tool over HTTP; cancelled in finally so a
@@ -48,6 +58,7 @@ public sealed class ClaudeService
             Role = MessageRole.User,
             Time = Now(),
             Content = prompt,
+            IsAutoResume = isAutoResume,
         };
         session.AppendTranscript(userMsg);
         _manager.PersistMessage(session, userMsg);
@@ -106,9 +117,15 @@ public sealed class ClaudeService
         catch (OperationCanceledException)
         {
             // User cancelled — not an error. Flip status to Idle; do not write an
-            // "[error]" transcript entry.
-            Log(session, LogLevel.Wrn, "Turn cancelled by user");
-            _manager.UpdateStatus(session, SessionStatus.Idle);
+            // "[error]" transcript entry. When StallDetectionService is the canceller
+            // (auto-resume case) it sets SuppressNextTurnCompleteNotification so the
+            // user doesn't see a "turn complete" toast for what's internally a restart.
+            var suppress = session.SuppressNextTurnCompleteNotification;
+            session.SuppressNextTurnCompleteNotification = false;
+            Log(session, LogLevel.Wrn, suppress
+                ? "Turn cancelled for auto-resume after stall"
+                : "Turn cancelled by user");
+            _manager.UpdateStatus(session, SessionStatus.Idle, suppressNotification: suppress);
         }
         catch (Exception ex)
         {
@@ -128,6 +145,12 @@ public sealed class ClaudeService
         finally
         {
             session.CancellationSource = null;
+            session.CurrentTurnTask = null;
+            // Defensive cleanup: if the turn ended via a real ResultEvent rather than the
+            // OCE catch (e.g. the network recovered mid-cancel), the OCE handler never ran
+            // and the auto-resume flag is still set. Clearing here means the next legit
+            // turn-complete won't get its notification suppressed by a stale flag.
+            session.SuppressNextTurnCompleteNotification = false;
             // Release any in-flight permission prompts so the MCP handler unwinds and
             // claude doesn't sit on an orphaned request.
             permHandler?.CancelAll();
@@ -176,6 +199,13 @@ public sealed class ClaudeService
         Dictionary<string, LiveAssistantState> liveByMessageId,
         PermissionTurnHandler? permHandler)
     {
+        // StallDetectionService checks how long ago the last event was — stamp on every
+        // type so a long-running tool (no text deltas for minutes) doesn't false-positive.
+        // Clearing IsStalled here also lets a session that briefly stalled then recovered
+        // drop out of needs-attention without manual intervention.
+        session.LastStreamEventAt = DateTime.UtcNow;
+        if (session.IsStalled) session.IsStalled = false;
+
         switch (ev)
         {
             case SystemInitEvent init:
@@ -215,6 +245,12 @@ public sealed class ClaudeService
                 break;
 
             case ResultEvent res:
+                // Record the result-arrival time before flipping status so StallDetectionService
+                // can detect the "result landed mid-cancel" race and skip a piggyback auto-resume.
+                session.LastResultEventAt = DateTime.UtcNow;
+                // A clean turn-complete resets the auto-resume retry budget so the next stall
+                // gets the same one-shot it would have on a fresh session.
+                session.AutoResumeAttempts = 0;
                 var finalStatus = res.IsError && !IsInterrupt(res)
                     ? SessionStatus.Error
                     : SessionStatus.Idle;
