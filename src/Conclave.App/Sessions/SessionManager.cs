@@ -406,6 +406,9 @@ public sealed class SessionManager : IDisposable
             ?? Array.Empty<ToolCallRow>();
         foreach (var r in rows)
         {
+            // Older sessions persisted TodoWrite/Task pills before we started hiding them —
+            // drop them on load so historical transcripts match the current rendering rules.
+            if (r.Kind is "TODO" or "TASK") continue;
             yield return new ToolCallVm
             {
                 Tokens = _tokens,

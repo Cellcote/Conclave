@@ -364,6 +364,16 @@ public sealed class ClaudeService
                     break;
                 case ToolUseContent tu:
                     hasToolUse = true;
+                    // TodoWrite is mirrored into the right-hand plan panel — rendering a
+                    // pill in the transcript too is just noise, so update the plan and skip.
+                    if (tu.Name == "TodoWrite")
+                    {
+                        UpdatePlanFromTodoWrite(session, tu.InputJson);
+                        break;
+                    }
+                    // Task (subagent) calls don't carry useful per-pill state — the agent's
+                    // summary lands in the next assistant message anyway. Skip the pill.
+                    if (tu.Name == "Task") break;
                     var vm = new ToolCallVm
                     {
                         Tokens = session.Tokens,
@@ -380,7 +390,6 @@ public sealed class ClaudeService
                     // permission_prompt for this tool_use_id, the handler knows which
                     // pill to flip to PendingApproval.
                     permHandler?.NoteToolUse(tu.Id, vm);
-                    if (tu.Name == "TodoWrite") UpdatePlanFromTodoWrite(session, tu.InputJson);
                     // AskUserQuestion + ExitPlanMode are interactive — claude is waiting on
                     // the user. EnterPlanMode is just claude announcing it switched modes,
                     // not a question, so it stays out of this branch. Fire both a native
