@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 
     private SessionManager? _manager;
     private AutoCleanupService? _autoCleanup;
+    private PermissionMcpServer? _permissions;
     private ShellVm? _shell;
     // Written on the UI thread from Activated/Deactivated, read by NotificationService
     // from a ClaudeService async continuation — volatile keeps the cross-thread read honest.
@@ -56,6 +57,12 @@ public partial class MainWindow : Window
         };
         _manager.Notifications = notifications;
 
+        // Local HTTP MCP server claude calls when a gated tool needs the user's approval.
+        // One listener per app process, routed per turn via bearer-token handlers.
+        _permissions = new PermissionMcpServer();
+        _permissions.Start();
+        _manager.Permissions = _permissions;
+
         var claudeService = new ClaudeService(_manager);
         var capabilities = ClaudeCapabilities.Detect();
         _shell = new ShellVm(tokens, _manager, capabilities);
@@ -74,8 +81,13 @@ public partial class MainWindow : Window
         SizeChanged += (_, e) => ApplyResponsiveLayout(e.NewSize.Width, _shell?.HasActiveSession ?? false);
         Closing += (_, _) =>
         {
+            // Order matters: dispose the session manager (and any active turns) before
+            // the MCP listener so an in-flight permission HTTP response can still be
+            // written back. Closing the listener first races the response onto a closed
+            // socket and claude sees a connection error instead of a clean deny.
             _autoCleanup?.Dispose();
             _manager?.Dispose();
+            _permissions?.Dispose();
         };
     }
 
