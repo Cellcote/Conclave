@@ -76,13 +76,17 @@ public partial class NewSessionModal : UserControl
             }
             catch (Exception ex)
             {
-                var first = ex.Message.Split('\n', 2)[0];
-                failures.Add($"{name}: {first}");
+                // Preserve the full message — CreateProject's "Not a git repository" error
+                // puts the actionable hint on a second line, and stripping it would leave
+                // the user without guidance.
+                failures.Add($"{name}: {ex.Message}");
             }
         }
 
         // Leave Project unset so the user can pick from the dropdown or start a fusion next.
-        ns.Project = null;
+        // Only reset when we actually added something — otherwise a fully-failed pick would
+        // silently clear whatever the user had selected before opening the picker.
+        if (added > 0) ns.Project = null;
         if (failures.Count > 0)
         {
             ns.ErrorMessage = picked.Count == 1
