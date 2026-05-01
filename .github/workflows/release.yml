@@ -77,12 +77,15 @@ jobs:
           # and Conclave.App PDBs alone are >150 MB uncompressed). Attaching
           # them as a separate Release asset keeps them archived per-version
           # for future symbolication without bloating the main artifact.
-          $sym = "_symbols"
-          New-Item -ItemType Directory -Path $sym | Out-Null
-          Move-Item publish/*.pdb $sym/
+          $pdbs = Get-Item publish/*.pdb -ErrorAction SilentlyContinue
+          if ($pdbs) {
+            $sym = "_symbols"
+            New-Item -ItemType Directory -Path $sym | Out-Null
+            Move-Item $pdbs $sym/
+            Compress-Archive -Path "$sym/*" -DestinationPath "Conclave-$version-$rid-symbols.zip"
+          }
 
           Compress-Archive -Path publish/* -DestinationPath "Conclave-$version-$rid.zip"
-          Compress-Archive -Path "$sym/*" -DestinationPath "Conclave-$version-$rid-symbols.zip"
           "ARTIFACT=Conclave-$version-$rid*.zip" | Out-File -Append $env:GITHUB_ENV
 
       # ---------- macOS ----------
