@@ -82,6 +82,7 @@ public sealed class SessionVm : Views.Observable
                 Notify(nameof(StatusPulses));
                 Notify(nameof(StatusColor));
                 Notify(nameof(IsBusy));
+                Notify(nameof(IsBusyAndNotStalled));
                 Notify(nameof(CanSend));
             }
         }
@@ -93,6 +94,10 @@ public sealed class SessionVm : Views.Observable
     public string StatusLabel => Status.Label();
     public bool StatusPulses => Status.Pulses();
     public bool IsBusy => Status is SessionStatus.Working or SessionStatus.RunningTool;
+    // The "Claude is thinking..." throbber should hide while a session is stalled — the
+    // stalled banner takes its slot. Exposed as a single boolean so the XAML doesn't need
+    // a MultiBinding (compiled bindings on bool conjunctions are awkward in Avalonia).
+    public bool IsBusyAndNotStalled => IsBusy && !_isStalled;
 
     private bool _isActive;
     public bool IsActive
@@ -120,6 +125,49 @@ public sealed class SessionVm : Views.Observable
 
     // Set by ClaudeService while a turn is in flight; ShellVm.Cancel() pulls the plug on it.
     public CancellationTokenSource? CancellationSource { get; set; }
+
+    // The Task returned by ClaudeService.RunTurnAsync for the in-flight turn. Auto-resume
+    // awaits this with a timeout after cancelling, so we know the previous turn has fully
+    // unwound before sending "continue". Null when no turn is in flight.
+    public Task? CurrentTurnTask { get; set; }
+
+    // UTC timestamp of the most recent stream event from the claude CLI for the current turn.
+    // StallDetectionService uses this to detect a stalled subprocess (e.g. after sleep/wake)
+    // when Status is Working/RunningTool but no events have arrived for some time. In-memory
+    // only — not persisted; on app restart the BuildSessionVm path resets in-progress turns
+    // to Idle anyway.
+    public DateTime LastStreamEventAt { get; set; }
+
+    // UTC timestamp of the most recent ResultEvent (turn-complete signal). Used by
+    // StallDetectionService to suppress auto-resume races: if a result lands within the
+    // small window between cancellation and re-prompt, the network was clearly recovering
+    // and we shouldn't pile a synthetic "continue" on top of a real completion.
+    public DateTime LastResultEventAt { get; set; }
+
+    // Number of times StallDetectionService has tried to auto-resume the current stall.
+    // Capped at 1 — after a second consecutive stall the session stays in IsStalled=true
+    // (needs-attention) and the user has to act. Reset to 0 on every successful turn-complete.
+    public int AutoResumeAttempts { get; set; }
+
+    // Set by StallDetectionService just before cancelling a stalled turn for auto-resume.
+    // ClaudeService's OCE-handler reads this so it can pass suppressNotification=true to
+    // SessionManager.UpdateStatus, preventing a spurious "turn complete" toast for what
+    // is internally a restart. Cleared by ClaudeService after the cancellation is observed.
+    public bool SuppressNextTurnCompleteNotification { get; set; }
+
+    // True when StallDetectionService has flagged the session as not having received stream
+    // events for the configured threshold while Status is Working/RunningTool. Surfaced as
+    // "Needs attention" via the sidebar filter and a Resume button on the row. Cleared when
+    // the turn either resumes (events start arriving again) or gets cancelled.
+    private bool _isStalled;
+    public bool IsStalled
+    {
+        get => _isStalled;
+        set
+        {
+            if (Set(ref _isStalled, value)) Notify(nameof(IsBusyAndNotStalled));
+        }
+    }
 
     private string _permissionMode = PermissionModes.Default;
     public string PermissionMode

@@ -16,4 +16,7 @@ public sealed record MessageRow
     // user messages and for messages persisted before this column was added. Captured to
     // enable future fork-at-message paths that target claude's own JSONL session storage.
     public string? ClaudeUuid { get; init; }
+    // True for synthetic "continue" prompts injected by StallDetectionService when
+    // auto-resuming a stalled session. Used to hide the user bubble in the transcript.
+    public bool IsAutoResume { get; init; }
 }

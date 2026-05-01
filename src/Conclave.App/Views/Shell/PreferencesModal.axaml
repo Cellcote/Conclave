@@ -68,6 +68,19 @@
                             Foreground="{Binding Tokens.Text}" FontSize="11.5" FontWeight="Medium" />
                 </StackPanel>
 
+                <StackPanel Spacing="10">
+                    <TextBlock Text="STALLED SESSIONS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{Binding Tokens.TextDim}" LetterSpacing="1.5" />
+
+                    <CheckBox Content="Automatically resume stalled sessions"
+                              IsChecked="{Binding AutoResumeStalledEnabled, Mode=TwoWay}"
+                              Foreground="{Binding Tokens.Text}" FontSize="12.5" />
+
+                    <TextBlock Text="When a session stalls — typically after waking from sleep — Conclave will silently send 'continue' to pick up where Claude left off. Only fires while Claude is thinking; mid-tool stalls always need attention manually so a tool call isn't re-run."
+                               FontSize="11" Foreground="{Binding Tokens.TextMute}"
+                               TextWrapping="Wrap" Margin="24,0,0,0" />
+                </StackPanel>
+
                 <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
                     <Button Grid.Column="1" Content="Done" Click="OnDone"
                             Background="{Binding Tokens.Text}" BorderThickness="0"

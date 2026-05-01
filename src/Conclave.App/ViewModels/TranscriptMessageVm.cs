@@ -14,6 +14,13 @@ public sealed class TranscriptMessageVm : Views.Observable
     // persisted before this column existed. Lets future fork-at-message paths target the
     // CLI's JSONL session storage; not used directly by path A's synthetic-context fork.
     public string? ClaudeUuid { get; set; }
+
+    // True for synthetic "continue" prompts injected by StallDetectionService when
+    // auto-resuming a stalled session. The user bubble is hidden in the transcript view
+    // and replaced with a small "— resumed after wake —" separator. Always false on
+    // assistant messages.
+    public bool IsAutoResume { get; init; }
+
     public ObservableCollection<ToolCallVm> Tools { get; } = new();
 
     private string _time = "";
@@ -27,7 +34,14 @@ public sealed class TranscriptMessageVm : Views.Observable
     public string Content
     {
         get => _content;
-        set { if (Set(ref _content, value)) Notify(nameof(HasContent)); }
+        set
+        {
+            if (Set(ref _content, value))
+            {
+                Notify(nameof(HasContent));
+                Notify(nameof(ShouldShowContent));
+            }
+        }
     }
 
     public bool HasContent => !string.IsNullOrEmpty(_content);
@@ -44,6 +58,7 @@ public sealed class TranscriptMessageVm : Views.Observable
             {
                 Notify(nameof(TopSpacing));
                 Notify(nameof(ContentTopMargin));
+                Notify(nameof(ShouldShowHeader));
             }
         }
     }
@@ -59,4 +74,11 @@ public sealed class TranscriptMessageVm : Views.Observable
     public bool IsAssistant => Role == MessageRole.Assistant;
     public string LabelPrefix => Role == MessageRole.User ? "You" : "Claude";
     public string HeaderText => $"{LabelPrefix} · {_time}";
+
+    // The transcript template only shows the header/body when the row is a regular message;
+    // auto-resume rows render as a thin "resumed after wake" separator and nothing else.
+    // Computed in the VM rather than via a XAML MultiBinding because compiled bindings on
+    // bool conjunctions are awkward to express cleanly across Avalonia versions.
+    public bool ShouldShowHeader => _showHeader && !IsAutoResume;
+    public bool ShouldShowContent => HasContent && !IsAutoResume;
 }

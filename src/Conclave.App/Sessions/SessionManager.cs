@@ -357,6 +357,7 @@ public sealed class SessionManager : IDisposable
                     .ToLocalTime().ToString("HH:mm"),
                 Content = row.Content,
                 ClaudeUuid = row.ClaudeUuid,
+                IsAutoResume = row.IsAutoResume,
             };
             if (!string.IsNullOrEmpty(row.ToolsJson))
             {
@@ -380,6 +381,7 @@ public sealed class SessionManager : IDisposable
             CreatedAt = Database.Now(),
             Seq = _db.NextSeq(session.Id),
             ClaudeUuid = msg.ClaudeUuid,
+            IsAutoResume = msg.IsAutoResume,
         });
     }
 
@@ -459,7 +461,7 @@ public sealed class SessionManager : IDisposable
         }
     }
 
-    public void UpdateStatus(SessionVm s, SessionStatus status)
+    public void UpdateStatus(SessionVm s, SessionStatus status, bool suppressNotification = false)
     {
         var previous = s.Status;
         _db.UpdateSessionStatus(s.Id, status.ToString());
@@ -472,7 +474,10 @@ public sealed class SessionManager : IDisposable
             BumpToTop(s);
             // Only notify on a real busy→done transition. App-load resets and session
             // creation also pass through here at Idle but stay Idle — those mustn't fire.
-            if (previous is SessionStatus.Working or SessionStatus.RunningTool)
+            // suppressNotification is set by StallDetectionService on the cancel-half of
+            // an auto-resume so the user doesn't get a "turn complete" toast for what is
+            // really just an internal restart.
+            if (!suppressNotification && previous is SessionStatus.Working or SessionStatus.RunningTool)
                 Notifications?.NotifyTurnComplete(s.Title, status == SessionStatus.Error);
         }
     }

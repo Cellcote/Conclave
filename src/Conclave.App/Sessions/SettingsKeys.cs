@@ -7,6 +7,7 @@ public static class SettingsKeys
     public const string AutoCleanupDays = "auto_cleanup.days";
     public const string NotificationsEnabled = "notifications.enabled";
     public const string ClaudeVersion = "claude.version";
+    public const string AutoResumeStalledSessions = "stall_detection.auto_resume";
 
     public const int DefaultAutoCleanupDays = 7;
 
@@ -24,4 +25,9 @@ public static class SettingsKeys
     // explicit "false" disables notifications.
     public static bool ReadNotificationsEnabled(Database db) =>
         !string.Equals(db.GetSetting(NotificationsEnabled), "false", StringComparison.OrdinalIgnoreCase);
+
+    // Default-off: stall detection is always on (sessions get flagged as needs-attention),
+    // but Conclave only auto-sends "continue" when the user explicitly opts in.
+    public static bool ReadAutoResumeStalledSessions(Database db) =>
+        string.Equals(db.GetSetting(AutoResumeStalledSessions), "true", StringComparison.OrdinalIgnoreCase);
 }

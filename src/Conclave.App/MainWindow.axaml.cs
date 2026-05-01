@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Conclave.App.Claude;
 using Conclave.App.Design;
+using Conclave.App.Platform;
 using Conclave.App.Sessions;
 using Conclave.App.ViewModels;
 using Conclave.App.Views.Shell;
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
 
     private SessionManager? _manager;
     private AutoCleanupService? _autoCleanup;
+    private StallDetectionService? _stallDetection;
     private PermissionMcpServer? _permissions;
     private ShellVm? _shell;
     // Written on the UI thread from Activated/Deactivated, read by NotificationService
@@ -86,12 +88,27 @@ public partial class MainWindow : Window
         capabilities.BeginProbe();
         _shell = new ShellVm(tokens, _manager, capabilities);
         StartupLog.Mark("MainWindow ctor: ShellVm built");
-        _shell.SendRequested += (session, prompt) => claudeService.RunTurnAsync(session, prompt);
+        // Capture the in-flight task on the SessionVm so StallDetectionService can await
+        // it cleanly when cancelling for auto-resume. The fire-and-forget shape means the
+        // returned Task would otherwise be lost.
+        _shell.SendRequested += (session, prompt) =>
+        {
+            var task = claudeService.RunTurnAsync(session, prompt);
+            session.CurrentTurnTask = task;
+            return task;
+        };
         _shell.PropertyChanged += OnShellPropertyChanged;
 
         _autoCleanup = new AutoCleanupService(_manager);
         _shell.AutoCleanup = _autoCleanup;
         _autoCleanup.Start();
+
+        // Detect stalled claude turns (e.g. after waking from sleep) and — if the user
+        // has opted in — silently send "continue" to resume them. Cross-platform wake
+        // detection via clock-jump heartbeat avoids any OS-specific bindings.
+        _stallDetection = new StallDetectionService(_manager, claudeService, new HeartbeatPowerService());
+        _shell.StallDetection = _stallDetection;
+        _stallDetection.Start();
 
         DataContext = _shell;
 
@@ -105,6 +122,7 @@ public partial class MainWindow : Window
             // the MCP listener so an in-flight permission HTTP response can still be
             // written back. Closing the listener first races the response onto a closed
             // socket and claude sees a connection error instead of a clean deny.
+            _stallDetection?.Dispose();
             _autoCleanup?.Dispose();
             _manager?.Dispose();
             _permissions?.Dispose();

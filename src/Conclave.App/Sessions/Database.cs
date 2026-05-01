@@ -115,6 +115,12 @@ public sealed class Database : IDisposable
             )
             WHERE repo_path = '';
             """),
+        (12, """
+            -- Synthetic "continue" prompts that StallDetectionService sends when auto-resuming
+            -- a stalled session. Hidden in the transcript UI so the conversation reads
+            -- naturally; the assistant's resumed reply still shows.
+            ALTER TABLE messages ADD COLUMN is_auto_resume INTEGER NOT NULL DEFAULT 0;
+            """),
     };
 
     // Explicit column lists so ordinal mapping in Read*() stays stable.
@@ -126,7 +132,7 @@ public sealed class Database : IDisposable
         "claude_session_id, plan_json, permission_mode, total_cost_usd, pr_merged_at, " +
         "pending_preamble";
     private const string MessageColumns =
-        "id, session_id, role, content, tools_json, created_at, seq, claude_uuid";
+        "id, session_id, role, content, tools_json, created_at, seq, claude_uuid, is_auto_resume";
 
     private Database(SqliteConnection conn) => _conn = conn;
 
@@ -426,6 +432,7 @@ public sealed class Database : IDisposable
         CreatedAt = r.GetInt64(5),
         Seq = r.GetInt32(6),
         ClaudeUuid = Str(r, 7),
+        IsAutoResume = r.GetInt32(8) != 0,
     };
 
     public int NextSeq(string sessionId)
@@ -439,12 +446,13 @@ public sealed class Database : IDisposable
     }
 
     public void InsertMessage(MessageRow m) => Exec(
-        "INSERT INTO messages (id, session_id, role, content, tools_json, created_at, seq, claude_uuid) " +
-        "VALUES ($id, $sessionId, $role, $content, $toolsJson, $createdAt, $seq, $claudeUuid);",
+        "INSERT INTO messages (id, session_id, role, content, tools_json, created_at, seq, claude_uuid, is_auto_resume) " +
+        "VALUES ($id, $sessionId, $role, $content, $toolsJson, $createdAt, $seq, $claudeUuid, $isAutoResume);",
         ("$id", m.Id), ("$sessionId", m.SessionId), ("$role", m.Role),
         ("$content", m.Content), ("$toolsJson", (object?)m.ToolsJson),
         ("$createdAt", m.CreatedAt), ("$seq", m.Seq),
-        ("$claudeUuid", (object?)m.ClaudeUuid));
+        ("$claudeUuid", (object?)m.ClaudeUuid),
+        ("$isAutoResume", m.IsAutoResume ? 1 : 0));
 
     public void UpdateMessageClaudeUuid(string id, string? uuid) => Exec(
         "UPDATE messages SET claude_uuid = $u WHERE id = $id;",

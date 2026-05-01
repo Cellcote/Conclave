@@ -81,6 +81,12 @@ public partial class MainPane : UserControl
         if (DataContext is ShellVm shell) shell.CancelActiveTurn();
     }
 
+    private void OnResumeStalled(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ShellVm { ActiveSession: { } session } shell)
+            shell.ResumeStalledSession(session);
+    }
+
     private void OnApprovePermission(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: ToolCallVm vm }) vm.Approve();

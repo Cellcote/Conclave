@@ -125,10 +125,27 @@
                                               IsEnabled="{Binding !$parent[UserControl].DataContext.ActiveSession.IsBusy}" />
                                 </ContextMenu>
                             </StackPanel.ContextMenu>
-                            <!-- Header row (hidden on consecutive same-role messages) -->
+                            <!-- Auto-resume separator: replaces the user bubble for the
+                                 synthetic "continue" prompt sent by StallDetectionService.
+                                 A thin centred line so the resumed assistant text reads as
+                                 a continuation of the prior reply rather than a new turn. -->
+                            <Grid IsVisible="{Binding IsAutoResume}"
+                                  ColumnDefinitions="*,Auto,*" Margin="0,16,0,12">
+                                <Border Grid.Column="0" Height="1" VerticalAlignment="Center"
+                                        Background="{Binding Tokens.Border}" Margin="0,0,12,0" />
+                                <TextBlock Grid.Column="1" Text="resumed after wake"
+                                           FontSize="10" FontStyle="Italic"
+                                           Foreground="{Binding Tokens.TextMute}"
+                                           VerticalAlignment="Center" />
+                                <Border Grid.Column="2" Height="1" VerticalAlignment="Center"
+                                        Background="{Binding Tokens.Border}" Margin="12,0,0,0" />
+                            </Grid>
+                            <!-- Header row (hidden on consecutive same-role messages, and
+                                 hidden entirely for auto-resume rows so the separator stands
+                                 alone). -->
                             <StackPanel Orientation="Horizontal" Spacing="6"
                                         Margin="0,22,0,8"
-                                        IsVisible="{Binding ShowHeader}">
+                                        IsVisible="{Binding ShouldShowHeader}">
                                 <Border Width="6" Height="6" CornerRadius="3"
                                         Background="{Binding Tokens.AccentBrush}"
                                         VerticalAlignment="Center" IsVisible="{Binding IsAssistant}" />
@@ -137,10 +154,11 @@
                             </StackPanel>
                             <!-- Body — markdown for assistant messages, plain selectable
                                  text for user. Hidden when empty so back-to-back tool-only
-                                 messages don't accumulate phantom line-height. -->
+                                 messages don't accumulate phantom line-height. Hidden for
+                                 auto-resume rows so the separator alone marks the seam. -->
                             <shell:MarkdownView Source="{Binding Content}"
                                                 Tokens="{Binding Tokens}"
-                                                IsVisible="{Binding HasContent}" />
+                                                IsVisible="{Binding ShouldShowContent}" />
                             <!-- Tool calls. Margin-top kept tiny so a chain of tool-only
                                  assistant chunks reads as one tight block. -->
                             <ItemsControl ItemsSource="{Binding Tools}" Margin="0,4,0,0">
@@ -202,10 +220,11 @@
             </ItemsControl>
 
             <!-- Throbber: tells the user we're waiting on claude. Bound to IsBusy so it
-                 covers both the pre-stream wait and tool-running periods. -->
+                 covers both the pre-stream wait and tool-running periods. Hidden when the
+                 session is stalled — the stalled banner takes its slot. -->
             <StackPanel Classes="throbber" Orientation="Horizontal" Spacing="8"
                         Margin="0,18,0,4"
-                        IsVisible="{Binding ActiveSession.IsBusy, FallbackValue=False}">
+                        IsVisible="{Binding ActiveSession.IsBusyAndNotStalled, FallbackValue=False}">
                 <StackPanel.Styles>
                     <Style Selector="StackPanel.throbber > Border">
                         <Style.Animations>
@@ -222,6 +241,24 @@
                 <TextBlock Text="Claude is thinking…" FontSize="12"
                            FontStyle="Italic" Foreground="{Binding Tokens.TextDim}"
                            VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Stalled banner: shown when StallDetectionService has flagged the session as
+                 silent past the threshold (typically after a sleep/wake). The Resume button
+                 is the manual escape hatch for users who didn't enable auto-resume. -->
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,18,0,4"
+                        IsVisible="{Binding ActiveSession.IsStalled, FallbackValue=False}">
+                <Border Width="6" Height="6" CornerRadius="3"
+                        Background="{Binding Tokens.Warn}" VerticalAlignment="Center" />
+                <TextBlock Text="Session stalled — Claude hasn't responded in a while."
+                           FontSize="12" FontStyle="Italic"
+                           Foreground="{Binding Tokens.TextDim}" VerticalAlignment="Center" />
+                <Button Content="Resume" Click="OnResumeStalled"
+                        Padding="10,3" FontSize="11.5" FontWeight="Medium"
+                        Background="Transparent"
+                        BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                        Foreground="{Binding Tokens.Text}"
+                        CornerRadius="{Binding Tokens.RadSmCorner}" />
             </StackPanel>
             </StackPanel>
         </ScrollViewer>

@@ -112,14 +112,14 @@ public sealed class ClaudeClient
             psi.ArgumentList.Add(claudeSessionId);
         }
 
+        // Spawn off the UI thread: Process.Start with three redirected pipes can block the
+        // calling thread long enough to swallow the layout pass for the just-appended user
+        // message, so the user's bubble doesn't paint until claude itself starts streaming.
+        using var proc = await Task.Run(() => Process.Start(psi), ct)
+            ?? throw new InvalidOperationException("failed to spawn claude");
+
         try
         {
-            // Spawn off the UI thread: Process.Start with three redirected pipes can block the
-            // calling thread long enough to swallow the layout pass for the just-appended user
-            // message, so the user's bubble doesn't paint until claude itself starts streaming.
-            using var proc = await Task.Run(() => Process.Start(psi), ct)
-                ?? throw new InvalidOperationException("failed to spawn claude");
-
             // Collect stderr concurrently so it doesn't fill the pipe and deadlock us.
             var stderrBuf = new StringBuilder();
             proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuf.AppendLine(e.Data); };
@@ -148,6 +148,17 @@ public sealed class ClaudeClient
         }
         finally
         {
+            // If the caller cancelled (Stop button, auto-resume on a stalled session, app shutdown),
+            // proactively kill the subprocess + its tree. The pipe-readers respect ct and exit
+            // promptly, but `using var proc` only disposes our handles — the child claude process
+            // can keep running until its own pipes break, which on a stalled network can take a
+            // while. Killing here means StallDetectionService's WaitAsync(5s) reliably observes
+            // a clean unwind before sending "continue".
+            if (ct.IsCancellationRequested)
+            {
+                try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+                catch { /* already exited or no permission — best-effort */ }
+            }
             // Best-effort: claude has already read the file by the time it spawns its
             // own MCP client, so a delete here is safe. Swallow IO errors — leaving a
             // temp file behind is preferable to crashing the turn on cleanup.
