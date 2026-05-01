@@ -6,6 +6,7 @@ public static class SettingsKeys
     public const string AutoCleanupEnabled = "auto_cleanup.enabled";
     public const string AutoCleanupDays = "auto_cleanup.days";
     public const string NotificationsEnabled = "notifications.enabled";
+    public const string ClaudeVersion = "claude.version";
 
     public const int DefaultAutoCleanupDays = 7;
 

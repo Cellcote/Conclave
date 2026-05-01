@@ -69,10 +69,10 @@
             <shell:RightPanel Grid.Row="1" Grid.Column="4"
                               IsVisible="{Binding HasActiveSession}" />
         </Grid>
-        <shell:NewSessionModal />
-        <shell:NewFusionProjectModal />
-        <shell:PreferencesModal />
-        <shell:AboutModal />
+        <!-- Modal host: NewSession / NewFusion / Preferences / About are added on first
+             open by MainWindow.axaml.cs, so a fresh launch doesn't pay the XAML parse +
+             layout cost for modal trees the user may never touch. -->
+        <Panel x:Name="ModalHost" />
         <shell:Toast />
     </Panel>
 </Window>

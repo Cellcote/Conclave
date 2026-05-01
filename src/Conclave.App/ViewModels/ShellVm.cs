@@ -32,6 +32,10 @@ public sealed class ShellVm : Views.Observable
                 {
                     value.IsActive = true;
                     Manager.LoadTranscriptIfNeeded(value);
+                    // Eager refresh for the just-activated session — the post-startup sweep
+                    // staggers all sessions, but a session the user picks should reflect
+                    // current diff/PR state without waiting in the sweep queue.
+                    Manager.RefreshOnActivation(value);
                 }
                 Notify(nameof(HasActiveSession));
                 Notify(nameof(ActiveProjectName));
