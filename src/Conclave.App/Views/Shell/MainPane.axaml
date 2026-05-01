@@ -4,6 +4,16 @@
              xmlns:shell="clr-namespace:Conclave.App.Views.Shell"
              x:Class="Conclave.App.Views.Shell.MainPane"
              x:DataType="vm:ShellVm">
+    <UserControl.Styles>
+        <!-- Subtle hover on the inactive Terminal/Plan/Logs segmented tabs.
+             Active tabs already carry a panel background, so they're skipped. -->
+        <Style Selector="Border.seg-tab">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.seg-tab:pointerover">
+            <Setter Property="Background" Value="{Binding Tokens.PanelHi}" />
+        </Style>
+    </UserControl.Styles>
     <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*,Auto">
 
         <!-- Header -->
@@ -53,8 +63,8 @@
                             <TextBlock Text="Terminal" FontSize="12" FontWeight="Medium"
                                        Foreground="{Binding Tokens.Text}" />
                         </Border>
-                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
-                                Background="Transparent"
+                        <Border Classes="seg-tab" Cursor="Hand"
+                                Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
                                 BorderThickness="1" BorderBrush="Transparent"
                                 PointerPressed="OnSegTerminal"
                                 IsVisible="{Binding !IsTerminalView}">
@@ -70,8 +80,8 @@
                             <TextBlock Text="Plan" FontSize="12" FontWeight="Medium"
                                        Foreground="{Binding Tokens.Text}" />
                         </Border>
-                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
-                                Background="Transparent"
+                        <Border Classes="seg-tab" Cursor="Hand"
+                                Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
                                 BorderThickness="1" BorderBrush="Transparent"
                                 PointerPressed="OnSegPlan"
                                 IsVisible="{Binding !IsPlanView}">
@@ -87,8 +97,8 @@
                             <TextBlock Text="Logs" FontSize="12" FontWeight="Medium"
                                        Foreground="{Binding Tokens.Text}" />
                         </Border>
-                        <Border Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
-                                Background="Transparent"
+                        <Border Classes="seg-tab" Cursor="Hand"
+                                Padding="11,4" CornerRadius="{Binding Tokens.RadSmCorner}"
                                 BorderThickness="1" BorderBrush="Transparent"
                                 PointerPressed="OnSegLogs"
                                 IsVisible="{Binding !IsLogsView}">

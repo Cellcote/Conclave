@@ -80,6 +80,7 @@ public sealed class SessionVm : Views.Observable
             {
                 Notify(nameof(StatusLabel));
                 Notify(nameof(StatusPulses));
+                Notify(nameof(StatusColor));
                 Notify(nameof(IsBusy));
                 Notify(nameof(CanSend));
             }
