@@ -57,6 +57,7 @@ public sealed class PermissionTurnHandler
             {
                 _pending.Remove(toolUseId);
                 _inputByToolUseId.Remove(toolUseId);
+                _vmByToolUseId.Remove(toolUseId);
             }
         }
 

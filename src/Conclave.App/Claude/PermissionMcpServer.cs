@@ -29,6 +29,10 @@ public sealed class PermissionMcpServer : IDisposable
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stopCts = new();
     private readonly ConcurrentDictionary<string, PermissionPromptHandler> _handlers = new();
+    // Tracks in-flight HandleAsync invocations so Dispose can wait for them to finish
+    // writing responses before the listener socket is torn down. ConcurrentDictionary
+    // is just used as a thread-safe set (key = handler task, value = ignored).
+    private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
     private Task? _loop;
 
     public int Port { get; private set; }
@@ -92,7 +96,10 @@ public sealed class PermissionMcpServer : IDisposable
             catch (HttpListenerException) { return; }
             catch (ObjectDisposedException) { return; }
 
-            _ = Task.Run(() => HandleAsync(ctx));
+            var handlerTask = Task.Run(() => HandleAsync(ctx));
+            _inFlight[handlerTask] = 0;
+            _ = handlerTask.ContinueWith(t => _inFlight.TryRemove(t, out _),
+                TaskContinuationOptions.ExecuteSynchronously);
         }
     }
 
@@ -387,7 +394,16 @@ public sealed class PermissionMcpServer : IDisposable
     public void Dispose()
     {
         _stopCts.Cancel();
+        // Stop accepting new connections — this also unblocks GetContextAsync in the
+        // accept loop, which lets _loop run to completion.
         try { _listener.Stop(); } catch { }
+        // Wait briefly for the accept loop and any in-flight HandleAsync tasks to drain
+        // so a permission response that was being written gets flushed before we close
+        // the socket. Cap the wait so a misbehaving handler can't hang process exit.
+        var pending = new List<Task>();
+        if (_loop is not null) pending.Add(_loop);
+        pending.AddRange(_inFlight.Keys);
+        try { Task.WaitAll(pending.ToArray(), TimeSpan.FromSeconds(2)); } catch { }
         try { _listener.Close(); } catch { }
     }
 }

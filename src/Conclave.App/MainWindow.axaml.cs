@@ -81,9 +81,13 @@ public partial class MainWindow : Window
         SizeChanged += (_, e) => ApplyResponsiveLayout(e.NewSize.Width, _shell?.HasActiveSession ?? false);
         Closing += (_, _) =>
         {
+            // Order matters: dispose the session manager (and any active turns) before
+            // the MCP listener so an in-flight permission HTTP response can still be
+            // written back. Closing the listener first races the response onto a closed
+            // socket and claude sees a connection error instead of a clean deny.
             _autoCleanup?.Dispose();
-            _permissions?.Dispose();
             _manager?.Dispose();
+            _permissions?.Dispose();
         };
     }
 
