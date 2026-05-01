@@ -41,9 +41,11 @@ public sealed class ClaudeCapabilities : Observable
         _ = Task.Run(async () =>
         {
             var version = await ProbeOnceAsync();
-            // PropertyChanged subscribers (Avalonia bindings) marshal themselves to the
-            // UI thread, so we don't need a Dispatcher hop here.
-            Version = version;
+            // Marshal the Version assignment back to the UI thread — Avalonia does NOT
+            // auto-marshal INotifyPropertyChanged events, so the bound IsVisible /
+            // Version controls in TitleBar.axaml + Sidebar.axaml would otherwise be
+            // mutated from the thread pool. Same pattern as SessionManager.RefreshPr.
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => Version = version);
             StartupLog.Mark(version is null
                 ? "claude probe complete (not detected)"
                 : $"claude probe complete: {version}");
