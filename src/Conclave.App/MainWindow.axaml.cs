@@ -138,4 +138,6 @@ public partial class MainWindow : Window
     }
 
     private bool RightColIsZero() => RightCol.Width.Value == 0;
+
+    private void OnAboutMenuClick(object? sender, System.EventArgs e) => _shell?.OpenAbout();
 }

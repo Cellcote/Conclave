@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.AboutModal"
+             x:DataType="vm:ShellVm">
+    <Panel IsVisible="{Binding IsAboutOpen}" IsHitTestVisible="{Binding IsAboutOpen}"
+           KeyDown="OnModalKeyDown"
+           Focusable="True">
+        <Border Background="#A6000000" PointerPressed="OnBackdropPressed" />
+
+        <Border Width="420"
+                VerticalAlignment="Center" HorizontalAlignment="Center"
+                Background="{Binding Tokens.Bg}"
+                BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadLgCorner}"
+                Padding="32,28">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="60" OffsetY="20" Opacity="0.5" Color="Black" />
+            </Border.Effect>
+
+            <StackPanel Spacing="10" HorizontalAlignment="Center">
+                <Image Source="avares://Conclave.App/Assets/icon.png"
+                       Width="72" Height="72"
+                       HorizontalAlignment="Center" Margin="0,0,0,4" />
+
+                <TextBlock Text="Conclave" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{Binding Tokens.Text}"
+                           HorizontalAlignment="Center" />
+
+                <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}"
+                           FontSize="11.5" Foreground="{Binding Tokens.TextDim}"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                           HorizontalAlignment="Center" />
+
+                <TextBlock Text="A desktop home for your Claude Code sessions — many at once, each in its own git worktree."
+                           FontSize="12" Foreground="{Binding Tokens.TextDim}"
+                           TextWrapping="Wrap" TextAlignment="Center"
+                           Margin="8,8,8,0" />
+
+                <TextBlock Text="github.com/Cellcote/Conclave"
+                           FontSize="11" Foreground="{Binding Tokens.TextMute}"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                           HorizontalAlignment="Center" Margin="0,8,0,0" />
+
+                <TextBlock Text="MIT License · © 2026 Rik Schreurs"
+                           FontSize="11" Foreground="{Binding Tokens.TextMute}"
+                           HorizontalAlignment="Center" />
+
+                <Button Content="Done" Click="OnDone"
+                        Background="{Binding Tokens.Text}" BorderThickness="0"
+                        CornerRadius="{Binding Tokens.RadSmCorner}" Padding="18,5"
+                        Foreground="{Binding Tokens.Bg}" FontSize="12" FontWeight="SemiBold"
+                        HorizontalAlignment="Center" Margin="0,16,0,0" />
+            </StackPanel>
+        </Border>
+    </Panel>
+</UserControl>

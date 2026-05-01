@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Reflection;
 using Conclave.App.Claude;
 using Conclave.App.Design;
 using Conclave.App.Sessions;
@@ -118,6 +119,36 @@ public sealed class ShellVm : Views.Observable
 
     public void OpenPreferences() => IsPreferencesOpen = true;
     public void ClosePreferences() => IsPreferencesOpen = false;
+
+    // --- About ---
+
+    private bool _isAboutOpen;
+    public bool IsAboutOpen
+    {
+        get => _isAboutOpen;
+        set => Set(ref _isAboutOpen, value);
+    }
+
+    public void OpenAbout() => IsAboutOpen = true;
+    public void CloseAbout() => IsAboutOpen = false;
+
+    // Reads the assembly's InformationalVersion (stamped by `dotnet publish -p:Version=...`)
+    // and trims the trailing `+commit` build metadata SourceLink appends. Falls back to the
+    // numeric assembly version, then a dev sentinel.
+    public string AppVersion
+    {
+        get
+        {
+            var asm = typeof(ShellVm).Assembly;
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrEmpty(info))
+            {
+                var plus = info.IndexOf('+');
+                return plus >= 0 ? info[..plus] : info;
+            }
+            return asm.GetName().Version?.ToString() ?? "0.0.0-dev";
+        }
+    }
 
     public bool AutoCleanupEnabled
     {

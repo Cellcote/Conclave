@@ -8,6 +8,14 @@
         Icon="/Assets/icon.png"
         Width="1320" Height="820" MinWidth="640" MinHeight="480"
         Background="{Binding Tokens.Bg}">
+    <!-- macOS app menu: replaces Avalonia's default "About Avalonia" item with our
+         own Conclave-branded modal. On Windows/Linux this attached menu is unused
+         (no menu bar is rendered). -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="About Conclave" Click="OnAboutMenuClick" />
+        </NativeMenu>
+    </NativeMenu.Menu>
     <Panel>
         <!-- Five-column layout: sidebar · splitter · main · splitter · right.
              Sidebar and right widths are pixel-sized and user-resizable via the
@@ -64,6 +72,7 @@
         <shell:NewSessionModal />
         <shell:NewFusionProjectModal />
         <shell:PreferencesModal />
+        <shell:AboutModal />
         <shell:Toast />
     </Panel>
 </Window>
