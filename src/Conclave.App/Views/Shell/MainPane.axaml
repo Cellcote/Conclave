@@ -146,28 +146,42 @@
                                              permission-request messages. -->
                                         <Border BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
                                                 CornerRadius="{Binding Tokens.RadSmCorner}" Padding="10,6">
-                                            <Grid ColumnDefinitions="46,*,Auto" ColumnSpacing="10">
-                                                <TextBlock Text="{Binding Kind}" FontSize="10"
-                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                                           Foreground="{Binding Tokens.TextDim}"
-                                                           VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Target}"
-                                                           FontSize="11.5"
-                                                           FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
-                                                           Foreground="{Binding Tokens.Text}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           VerticalAlignment="Center" />
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal"
-                                                            Spacing="6" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding StatusGlyph}" FontSize="11.5"
-                                                               Foreground="{Binding StatusBrush}" />
-                                                    <TextBlock Text="{Binding Meta}" FontSize="11.5"
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="46,*,Auto" ColumnSpacing="10">
+                                                    <TextBlock Text="{Binding Kind}" FontSize="10"
                                                                FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
                                                                Foreground="{Binding Tokens.TextDim}"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Target}"
+                                                               FontSize="11.5"
+                                                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                               Foreground="{Binding Tokens.Text}"
                                                                TextTrimming="CharacterEllipsis"
-                                                               MaxWidth="200" />
+                                                               VerticalAlignment="Center" />
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                                Spacing="6" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding StatusGlyph}" FontSize="11.5"
+                                                                   Foreground="{Binding StatusBrush}" />
+                                                        <TextBlock Text="{Binding Meta}" FontSize="11.5"
+                                                                   FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                                                   Foreground="{Binding Tokens.TextDim}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="200" />
+                                                    </StackPanel>
+                                                </Grid>
+                                                <!-- Permission ask: shows when claude is waiting on the user
+                                                     to allow or deny this specific tool invocation. -->
+                                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                                            IsVisible="{Binding IsAwaitingApproval}">
+                                                    <TextBlock Text="Allow this tool to run?" FontSize="11.5"
+                                                               Foreground="{Binding Tokens.TextDim}"
+                                                               VerticalAlignment="Center" />
+                                                    <Button Content="Approve" FontSize="11.5" Padding="8,3"
+                                                            Click="OnApprovePermission" />
+                                                    <Button Content="Deny" FontSize="11.5" Padding="8,3"
+                                                            Click="OnDenyPermission" />
                                                 </StackPanel>
-                                            </Grid>
+                                            </StackPanel>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

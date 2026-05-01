@@ -81,6 +81,16 @@ public partial class MainPane : UserControl
         if (DataContext is ShellVm shell) shell.CancelActiveTurn();
     }
 
+    private void OnApprovePermission(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: ToolCallVm vm }) vm.Approve();
+    }
+
+    private void OnDenyPermission(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: ToolCallVm vm }) vm.Deny();
+    }
+
     private void OnForkFromHereMenu(object? sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem mi || mi.DataContext is not TranscriptMessageVm msg

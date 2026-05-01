@@ -37,6 +37,10 @@ public sealed class SessionManager : IDisposable
     // Wired by MainWindow at startup. Optional — when null, no native notifications fire.
     public NotificationService? Notifications { get; set; }
 
+    // Wired by MainWindow at startup. When null (e.g. smoke harnesses, headless tests),
+    // ClaudeService skips MCP wiring and falls back to the CLI's own permission handling.
+    public Claude.PermissionMcpServer? Permissions { get; set; }
+
     public SessionManager(Database db, string worktreeRoot, Tokens tokens)
     {
         _db = db;

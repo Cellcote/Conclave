@@ -23,6 +23,23 @@ public sealed class ClaudeService
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, internalCts.Token);
         session.CancellationSource = internalCts;
 
+        // Per-turn permission router. Registered with the shared MCP server so claude
+        // can call our permission_prompt tool over HTTP; cancelled in finally so a
+        // pending approval doesn't leak past the turn that owns it.
+        PermissionTurnHandler? permHandler = null;
+        string? permToken = null;
+        string? mcpConfigJson = null;
+        string? permissionPromptTool = null;
+        string? settingsJson = null;
+        if (_manager.Permissions is { } mcpServer && session.PermissionMode != PermissionModes.BypassPermissions)
+        {
+            permHandler = new PermissionTurnHandler();
+            permToken = mcpServer.RegisterHandler(permHandler.HandleAsync);
+            mcpConfigJson = mcpServer.BuildMcpConfigJson(permToken);
+            permissionPromptTool = "mcp__conclave__permission_prompt";
+            settingsJson = BuildAskSettingsJson(session.PermissionMode);
+        }
+
         // 1. Append + persist the user message.
         var userMsg = new TranscriptMessageVm
         {
@@ -73,9 +90,12 @@ public sealed class ClaudeService
                 forkFromSessionId: session.PendingForkFromClaudeSessionId,
                 appendSystemPrompt: preamble,
                 additionalDirs: session.AdditionalDirs.Count > 0 ? session.AdditionalDirs : null,
+                mcpConfigJson: mcpConfigJson,
+                permissionPromptTool: permissionPromptTool,
+                settingsJson: settingsJson,
                 ct: linked.Token))
             {
-                Handle(session, ev, toolsById, messageByToolId, liveByMessageId);
+                Handle(session, ev, toolsById, messageByToolId, liveByMessageId, permHandler);
             }
             // The stream completed without throwing — claude has consumed the preamble (it
             // was injected into the system prompt of this invocation). Clear it so future
@@ -108,8 +128,25 @@ public sealed class ClaudeService
         finally
         {
             session.CancellationSource = null;
+            // Release any in-flight permission prompts so the MCP handler unwinds and
+            // claude doesn't sit on an orphaned request.
+            permHandler?.CancelAll();
+            if (permToken is not null) _manager.Permissions?.UnregisterHandler(permToken);
         }
     }
+
+    // Inject `permissions.ask` rules so the CLI routes gated tool calls through our MCP
+    // permission_prompt instead of silently auto-allowing in --print mode. Edit/Write/
+    // NotebookEdit drop out of the list under acceptEdits — the CLI's built-in mode
+    // handles those, so we'd just be re-asking for things the user already opted out of.
+    // Read-only tools (Read, Glob, Grep) are never gated; they don't mutate anything.
+    private static string BuildAskSettingsJson(string permissionMode) => permissionMode switch
+    {
+        PermissionModes.AcceptEdits =>
+            "{\"permissions\":{\"ask\":[\"Bash\",\"WebFetch\",\"WebSearch\",\"Task\"]}}",
+        _ =>
+            "{\"permissions\":{\"ask\":[\"Bash\",\"Edit\",\"Write\",\"NotebookEdit\",\"WebFetch\",\"WebSearch\",\"Task\"]}}",
+    };
 
     private static void Log(SessionVm session, LogLevel level, string message) =>
         session.AppendLog(new LogLineVm
@@ -136,7 +173,8 @@ public sealed class ClaudeService
         StreamJsonEvent ev,
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
-        Dictionary<string, LiveAssistantState> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId,
+        PermissionTurnHandler? permHandler)
     {
         switch (ev)
         {
@@ -155,7 +193,7 @@ public sealed class ClaudeService
                 break;
 
             case AssistantEvent asst:
-                AppendAssistantMessage(session, asst, toolsById, messageByToolId, liveByMessageId);
+                AppendAssistantMessage(session, asst, toolsById, messageByToolId, liveByMessageId, permHandler);
                 break;
 
             case UserEvent user:
@@ -289,7 +327,8 @@ public sealed class ClaudeService
         AssistantEvent asst,
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
-        Dictionary<string, LiveAssistantState> liveByMessageId)
+        Dictionary<string, LiveAssistantState> liveByMessageId,
+        PermissionTurnHandler? permHandler)
     {
         var buf = new StringBuilder();
 
@@ -331,10 +370,16 @@ public sealed class ClaudeService
                         Kind = MapKind(tu.Name),
                         Target = TargetFromInput(tu.Name, tu.InputJson, session.Worktree),
                         Status = ToolStatus.Pending,
+                        ToolUseId = tu.Id,
+                        PermissionHandler = permHandler,
                     };
                     message.Tools.Add(vm);
                     toolsById[tu.Id] = vm;
                     messageByToolId[tu.Id] = message;
+                    // Register the VM with the permission handler so when claude calls
+                    // permission_prompt for this tool_use_id, the handler knows which
+                    // pill to flip to PendingApproval.
+                    permHandler?.NoteToolUse(tu.Id, vm);
                     if (tu.Name == "TodoWrite") UpdatePlanFromTodoWrite(session, tu.InputJson);
                     // AskUserQuestion + ExitPlanMode are interactive — claude is waiting on
                     // the user. EnterPlanMode is just claude announcing it switched modes,

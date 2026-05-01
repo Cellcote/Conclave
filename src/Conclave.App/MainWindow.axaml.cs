@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 
     private SessionManager? _manager;
     private AutoCleanupService? _autoCleanup;
+    private PermissionMcpServer? _permissions;
     private ShellVm? _shell;
     // Written on the UI thread from Activated/Deactivated, read by NotificationService
     // from a ClaudeService async continuation — volatile keeps the cross-thread read honest.
@@ -56,6 +57,12 @@ public partial class MainWindow : Window
         };
         _manager.Notifications = notifications;
 
+        // Local HTTP MCP server claude calls when a gated tool needs the user's approval.
+        // One listener per app process, routed per turn via bearer-token handlers.
+        _permissions = new PermissionMcpServer();
+        _permissions.Start();
+        _manager.Permissions = _permissions;
+
         var claudeService = new ClaudeService(_manager);
         var capabilities = ClaudeCapabilities.Detect();
         _shell = new ShellVm(tokens, _manager, capabilities);
@@ -75,6 +82,7 @@ public partial class MainWindow : Window
         Closing += (_, _) =>
         {
             _autoCleanup?.Dispose();
+            _permissions?.Dispose();
             _manager?.Dispose();
         };
     }

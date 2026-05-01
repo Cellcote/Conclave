@@ -18,6 +18,9 @@ public sealed class ClaudeClient
         string? forkFromSessionId = null,
         string? appendSystemPrompt = null,
         IReadOnlyList<string>? additionalDirs = null,
+        string? mcpConfigJson = null,
+        string? permissionPromptTool = null,
+        string? settingsJson = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo("claude")
@@ -60,6 +63,29 @@ public sealed class ClaudeClient
                 psi.ArgumentList.Add("--add-dir");
                 psi.ArgumentList.Add(dir);
             }
+        }
+        // Permission MCP wiring: --mcp-config registers our local HTTP server under the
+        // name "conclave"; --permission-prompt-tool tells claude to call our tool when a
+        // gated tool needs approval. Pass both or neither — half-wiring just produces an
+        // unhelpful "MCP tool ... not found" error.
+        if (!string.IsNullOrEmpty(mcpConfigJson))
+        {
+            psi.ArgumentList.Add("--mcp-config");
+            psi.ArgumentList.Add(mcpConfigJson);
+        }
+        if (!string.IsNullOrEmpty(permissionPromptTool))
+        {
+            psi.ArgumentList.Add("--permission-prompt-tool");
+            psi.ArgumentList.Add(permissionPromptTool);
+        }
+        // Used for permission gating: inject `permissions.ask` so tools that the CLI
+        // would otherwise auto-allow in --print mode get routed through our
+        // permission-prompt MCP tool instead. Layered on top of the user's regular
+        // settings (settings/local/etc) — see Claude Code's setting-source merge order.
+        if (!string.IsNullOrEmpty(settingsJson))
+        {
+            psi.ArgumentList.Add("--settings");
+            psi.ArgumentList.Add(settingsJson);
         }
         // Resume target: prefer a fork-from id (first turn of a freshly forked session) over
         // the regular resume id, since a forked session won't have its own ClaudeSessionId
