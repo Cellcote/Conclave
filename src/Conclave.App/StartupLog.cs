@@ -41,10 +41,12 @@ public static class StartupLog
 
     public static void Mark(string label)
     {
-        var now = Sw.ElapsedMilliseconds;
-        long delta;
+        // Snapshot inside the lock so concurrent Mark calls (UI thread + background
+        // probe thread) can't reorder past each other and produce negative deltas.
+        long now, delta;
         lock (Gate)
         {
+            now = Sw.ElapsedMilliseconds;
             delta = now - _lastElapsedMs;
             _lastElapsedMs = now;
         }

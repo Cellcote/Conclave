@@ -38,9 +38,9 @@ public sealed class ClaudeCapabilities : Observable
     // and forget — failures leave Version null, which matches the "not detected" UX.
     public void BeginProbe()
     {
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
-            var version = ProbeOnce();
+            var version = await ProbeOnceAsync();
             // PropertyChanged subscribers (Avalonia bindings) marshal themselves to the
             // UI thread, so we don't need a Dispatcher hop here.
             Version = version;
@@ -50,7 +50,7 @@ public sealed class ClaudeCapabilities : Observable
         });
     }
 
-    private static string? ProbeOnce()
+    private static async Task<string?> ProbeOnceAsync()
     {
         try
         {
@@ -66,17 +66,30 @@ public sealed class ClaudeCapabilities : Observable
             using var p = Process.Start(psi);
             if (p is null) return null;
 
-            var stdout = p.StandardOutput.ReadToEnd().Trim();
-            // "claude --version" doesn't reliably return in some environments; cap the wait.
-            if (!p.WaitForExit(2500))
+            // Cap the whole probe at 2.5s. The previous synchronous form did
+            // `ReadToEnd()` before `WaitForExit(timeout)`, which made the timeout
+            // unreachable if the child never closed its stdout (a stuck npm/node
+            // shim under AV inspection on Windows is exactly this scenario). Use
+            // async APIs with a CTS so the cap applies to both the read and the
+            // wait — and so a hang here just leaks a child process for a moment
+            // rather than a thread-pool thread for the rest of the session.
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            try
             {
-                try { p.Kill(); } catch { }
+                // Pump stdout concurrently with the wait so a full pipe buffer
+                // can't deadlock the process before it exits.
+                var stdoutTask = p.StandardOutput.ReadToEndAsync(cts.Token);
+                await p.WaitForExitAsync(cts.Token);
+                var stdout = (await stdoutTask).Trim();
+                if (p.ExitCode != 0) return null;
+                // Output looks like "2.1.119 (Claude Code)" — keep the leading version token.
+                return stdout.Split(' ', 2)[0];
+            }
+            catch (OperationCanceledException)
+            {
+                try { p.Kill(entireProcessTree: true); } catch { }
                 return null;
             }
-            if (p.ExitCode != 0) return null;
-
-            // Output looks like "2.1.119 (Claude Code)" — keep the leading version token.
-            return stdout.Split(' ', 2)[0];
         }
         catch
         {
