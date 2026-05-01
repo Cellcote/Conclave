@@ -56,22 +56,42 @@ public partial class NewSessionModal : UserControl
         if (top is null) return;
         var picked = await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Pick a git repository",
-            AllowMultiple = false,
+            Title = "Pick git repositories",
+            AllowMultiple = true,
         });
         if (picked.Count == 0) return;
-        var path = picked[0].Path.LocalPath;
         ns.ErrorMessage = null;
-        try
+
+        var failures = new List<string>();
+        int added = 0;
+        foreach (var folder in picked)
         {
+            var path = folder.Path.LocalPath;
             var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar));
             if (string.IsNullOrEmpty(name)) name = path;
-            var p = shell.Manager.CreateProject(name, path);
-            ns.Project = p;
+            try
+            {
+                shell.Manager.CreateProject(name, path);
+                added++;
+            }
+            catch (Exception ex)
+            {
+                // Preserve the full message — CreateProject's "Not a git repository" error
+                // puts the actionable hint on a second line, and stripping it would leave
+                // the user without guidance.
+                failures.Add($"{name}: {ex.Message}");
+            }
         }
-        catch (Exception ex)
+
+        // Leave Project unset so the user can pick from the dropdown or start a fusion next.
+        // Only reset when we actually added something — otherwise a fully-failed pick would
+        // silently clear whatever the user had selected before opening the picker.
+        if (added > 0) ns.Project = null;
+        if (failures.Count > 0)
         {
-            ns.ErrorMessage = ex.Message;
+            ns.ErrorMessage = picked.Count == 1
+                ? failures[0]
+                : $"Added {added} of {picked.Count}. Skipped:\n  - {string.Join("\n  - ", failures)}";
         }
     }
 
