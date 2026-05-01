@@ -69,9 +69,24 @@ jobs:
         if: matrix.pkg == 'zip'
         shell: pwsh
         run: |
-          $name = "Conclave-${{ steps.ver.outputs.version }}-${{ matrix.rid }}.zip"
-          Compress-Archive -Path publish/* -DestinationPath $name
-          "ARTIFACT=$name" | Out-File -Append $env:GITHUB_ENV
+          $version = "${{ steps.ver.outputs.version }}"
+          $rid = "${{ matrix.rid }}"
+
+          # Split PDBs into a separate -symbols.zip. Debug symbols aren't
+          # consulted at runtime and dominate the user download (the SkiaSharp
+          # and Conclave.App PDBs alone are >150 MB uncompressed). Attaching
+          # them as a separate Release asset keeps them archived per-version
+          # for future symbolication without bloating the main artifact.
+          $pdbs = Get-Item publish/*.pdb -ErrorAction SilentlyContinue
+          if ($pdbs) {
+            $sym = "_symbols"
+            New-Item -ItemType Directory -Path $sym | Out-Null
+            Move-Item $pdbs $sym/
+            Compress-Archive -Path "$sym/*" -DestinationPath "Conclave-$version-$rid-symbols.zip"
+          }
+
+          Compress-Archive -Path publish/* -DestinationPath "Conclave-$version-$rid.zip"
+          "ARTIFACT=Conclave-$version-$rid*.zip" | Out-File -Append $env:GITHUB_ENV
 
       # ---------- macOS ----------
       # Both publish and bundle live in scripts/build-mac-app.sh so the locally
@@ -84,6 +99,16 @@ jobs:
         run: |
           scripts/build-mac-app.sh ${{ matrix.rid }}
 
+          # Pull the dSYM out of the bundle and ship it separately. Apple
+          # convention is to keep dSYMs alongside (not inside) the .app, and
+          # they only matter for symbolicating crash reports.
+          DSYM="Conclave.app/Contents/MacOS/Conclave.App.dSYM"
+          if [[ -d "$DSYM" ]]; then
+            SYMBOLS="Conclave-${VERSION}-${{ matrix.rid }}-symbols.zip"
+            ditto -c -k --keepParent "$DSYM" "$SYMBOLS"
+            rm -rf "$DSYM"
+          fi
+
           NAME="Conclave-${VERSION}-${{ matrix.rid }}.dmg"
           # Stage the .app + Applications symlink so the DMG offers drag-to-install.
           STAGE="$(mktemp -d)/dmg"
@@ -91,7 +116,7 @@ jobs:
           cp -R Conclave.app "$STAGE/"
           ln -s /Applications "$STAGE/Applications"
           hdiutil create -volname "Conclave" -srcfolder "$STAGE" -ov -format UDZO "$NAME"
-          echo "ARTIFACT=$NAME" >> "$GITHUB_ENV"
+          echo "ARTIFACT=Conclave-${VERSION}-${{ matrix.rid }}*" >> "$GITHUB_ENV"
 
       # ---------- Linux ----------
       - name: Package (Linux tar.gz + AppImage)
@@ -99,6 +124,15 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
+
+          # NativeAOT splits debug info into Conclave.App.dbg (~50 MB). It's
+          # only used by debuggers, so move it into a -symbols.tar.gz Release
+          # asset and ship the slim binary to users.
+          if [[ -f publish/Conclave.App.dbg ]]; then
+            SYMBOLS="Conclave-${VERSION}-${{ matrix.rid }}-symbols.tar.gz"
+            tar -czf "$SYMBOLS" -C publish Conclave.App.dbg
+            rm -f publish/Conclave.App.dbg
+          fi
 
           # tar.gz: just the publish output, plus the icon and a desktop entry.
           STAGE="conclave-${VERSION}"
@@ -144,7 +178,7 @@ jobs:
           ./appimagetool --appimage-extract-and-run "$APPDIR" "$APPIMG"
 
           # Multiple artifacts on Linux — upload-artifact picks them up via glob.
-          echo "ARTIFACT=Conclave-${VERSION}-${{ matrix.rid }}.*" >> "$GITHUB_ENV"
+          echo "ARTIFACT=Conclave-${VERSION}-${{ matrix.rid }}*" >> "$GITHUB_ENV"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
