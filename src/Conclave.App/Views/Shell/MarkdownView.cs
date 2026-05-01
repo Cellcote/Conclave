@@ -9,9 +9,9 @@ using Conclave.App.Design;
 namespace Conclave.App.Views.Shell;
 
 // Tiny markdown subset renderer: bold (**), inline code (`), code fences (```),
-// bullet lists (- /+ /*), numbered lists (1.). No headers, no tables, no links —
-// just what claude actually emits in normal replies. Enough to make assistant
-// messages stop looking like raw text.
+// bullet lists (- /+ /*), numbered lists (1.), ATX headers (# .. ######), and
+// GFM pipe tables. No links — just what claude actually emits in normal replies.
+// Enough to make assistant messages stop looking like raw text.
 public sealed class MarkdownView : UserControl
 {
     public static readonly StyledProperty<string?> SourceProperty =
@@ -84,6 +84,33 @@ public sealed class MarkdownView : UserControl
                 continue;
             }
 
+            // ATX header: 1-6 '#' followed by a space.
+            if (LooksLikeHeader(line, out var level, out var headerText))
+            {
+                i++;
+                yield return new HeaderBlock(level, headerText);
+                continue;
+            }
+
+            // GFM pipe table: header row + separator row (---) + data rows.
+            if (line.Contains('|')
+                && i + 1 < lines.Length
+                && IsTableSeparator(lines[i + 1]))
+            {
+                var headers = ParseTableRow(line);
+                i += 2;  // header + separator
+                var rows = new List<IReadOnlyList<string>>();
+                while (i < lines.Length
+                       && !string.IsNullOrWhiteSpace(lines[i])
+                       && lines[i].Contains('|'))
+                {
+                    rows.Add(ParseTableRow(lines[i]));
+                    i++;
+                }
+                yield return new TableBlock(headers, rows);
+                continue;
+            }
+
             // List (bullets or numbered) — consume contiguous lines.
             if (LooksLikeListItem(line, out _, out _))
             {
@@ -98,12 +125,16 @@ public sealed class MarkdownView : UserControl
                 continue;
             }
 
-            // Paragraph — consume until blank line / list / fence.
+            // Paragraph — consume until blank line / list / fence / header / table.
             var para = new StringBuilder();
             while (i < lines.Length
                    && !string.IsNullOrWhiteSpace(lines[i])
                    && !lines[i].StartsWith("```", StringComparison.Ordinal)
-                   && !LooksLikeListItem(lines[i], out _, out _))
+                   && !LooksLikeListItem(lines[i], out _, out _)
+                   && !LooksLikeHeader(lines[i], out _, out _)
+                   && !(lines[i].Contains('|')
+                        && i + 1 < lines.Length
+                        && IsTableSeparator(lines[i + 1])))
             {
                 if (para.Length > 0) para.Append(' ');
                 para.Append(lines[i].TrimEnd());
@@ -111,6 +142,60 @@ public sealed class MarkdownView : UserControl
             }
             yield return new ParagraphBlock(para.ToString());
         }
+    }
+
+    private static bool LooksLikeHeader(string line, out int level, out string text)
+    {
+        level = 0;
+        text = "";
+        var trimmed = line.TrimStart();
+        int n = 0;
+        while (n < trimmed.Length && trimmed[n] == '#' && n < 6) n++;
+        if (n == 0 || n >= trimmed.Length || trimmed[n] != ' ') return false;
+        level = n;
+        // CommonMark optional closing '#' run: only stripped when preceded by
+        // whitespace (or when it makes up the entire body), so "## C#" keeps
+        // its trailing '#' but "## Heading ##" does not.
+        var raw = trimmed[(n + 1)..].TrimEnd();
+        int end = raw.Length;
+        while (end > 0 && raw[end - 1] == '#') end--;
+        if (end < raw.Length && (end == 0 || raw[end - 1] == ' ' || raw[end - 1] == '\t'))
+            text = raw[..end].TrimEnd();
+        else
+            text = raw;
+        return true;
+    }
+
+    // GFM table separator: cells of optional ':' + dashes + optional ':',
+    // separated by '|'. Outer pipes are optional. e.g. "|---|:--:|--:|".
+    private static bool IsTableSeparator(string line)
+    {
+        var trimmed = line.Trim();
+        if (trimmed.Length == 0 || !trimmed.Contains('|')) return false;
+        if (trimmed.StartsWith('|')) trimmed = trimmed[1..];
+        if (trimmed.EndsWith('|')) trimmed = trimmed[..^1];
+        var cells = trimmed.Split('|');
+        if (cells.Length == 0) return false;
+        foreach (var raw in cells)
+        {
+            var c = raw.Trim();
+            if (c.Length == 0) return false;
+            int start = 0, end = c.Length;
+            if (c[0] == ':') start = 1;
+            if (c[^1] == ':') end = c.Length - 1;
+            if (end <= start) return false;
+            for (int k = start; k < end; k++)
+                if (c[k] != '-') return false;
+        }
+        return true;
+    }
+
+    private static IReadOnlyList<string> ParseTableRow(string line)
+    {
+        var trimmed = line.Trim();
+        if (trimmed.StartsWith('|')) trimmed = trimmed[1..];
+        if (trimmed.EndsWith('|')) trimmed = trimmed[..^1];
+        return trimmed.Split('|').Select(c => c.Trim()).ToList();
     }
 
     private static bool LooksLikeListItem(string line, out string marker, out string content)
@@ -220,6 +305,109 @@ public sealed class MarkdownView : UserControl
             };
             foreach (var inline in ParseInlines(Text, tokens)) tb.Inlines!.Add(inline);
             return tb;
+        }
+    }
+
+    private sealed record HeaderBlock(int Level, string Text) : Block
+    {
+        public override Control Render(Tokens tokens)
+        {
+            // Sizes step down per level. H1 is rare in chat; keep it punchy but
+            // not so big it dominates the whole bubble.
+            var (size, lineHeight, weight) = Level switch
+            {
+                1 => (20.0, 28.0, FontWeight.Bold),
+                2 => (17.0, 24.0, FontWeight.Bold),
+                3 => (15.0, 22.0, FontWeight.SemiBold),
+                _ => (14.0, 22.0, FontWeight.SemiBold),
+            };
+            var tb = new SelectableTextBlock
+            {
+                FontSize = size,
+                LineHeight = lineHeight,
+                FontWeight = weight,
+                Foreground = tokens.Text,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+            foreach (var inline in ParseInlines(Text, tokens)) tb.Inlines!.Add(inline);
+            return tb;
+        }
+    }
+
+    private sealed record TableBlock(
+        IReadOnlyList<string> Headers,
+        IReadOnlyList<IReadOnlyList<string>> Rows) : Block
+    {
+        public override Control Render(Tokens tokens)
+        {
+            var cols = Headers.Count;
+            var grid = new Grid();
+            for (int c = 0; c < cols; c++)
+                grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            // Let the last column stretch so the table fills available width.
+            if (cols > 0)
+                grid.ColumnDefinitions[cols - 1] = new ColumnDefinition(GridLength.Star);
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            for (int r = 0; r < Rows.Count; r++)
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+
+            for (int c = 0; c < cols; c++)
+            {
+                var cell = MakeCell(Headers[c], tokens, isHeader: true,
+                    isLastRow: Rows.Count == 0, isLastCol: c == cols - 1);
+                Grid.SetRow(cell, 0);
+                Grid.SetColumn(cell, c);
+                grid.Children.Add(cell);
+            }
+
+            for (int r = 0; r < Rows.Count; r++)
+            {
+                var row = Rows[r];
+                for (int c = 0; c < cols; c++)
+                {
+                    var text = c < row.Count ? row[c] : "";
+                    var cell = MakeCell(text, tokens, isHeader: false,
+                        isLastRow: r == Rows.Count - 1, isLastCol: c == cols - 1);
+                    Grid.SetRow(cell, r + 1);
+                    Grid.SetColumn(cell, c);
+                    grid.Children.Add(cell);
+                }
+            }
+
+            return new Border
+            {
+                BorderBrush = tokens.Border,
+                BorderThickness = new Thickness(1),
+                CornerRadius = tokens.RadSmCorner,
+                ClipToBounds = true,
+                Child = grid,
+            };
+        }
+
+        private static Control MakeCell(string text, Tokens tokens,
+            bool isHeader, bool isLastRow, bool isLastCol)
+        {
+            var tb = new SelectableTextBlock
+            {
+                FontSize = 13,
+                LineHeight = 19,
+                Foreground = tokens.Text,
+                TextWrapping = TextWrapping.Wrap,
+                FontWeight = isHeader ? FontWeight.SemiBold : FontWeight.Normal,
+            };
+            foreach (var inline in ParseInlines(text, tokens)) tb.Inlines!.Add(inline);
+            return new Border
+            {
+                Background = isHeader ? tokens.Panel2 : null,
+                BorderBrush = tokens.Border,
+                BorderThickness = new Thickness(
+                    0, 0,
+                    isLastCol ? 0 : 1,
+                    isLastRow ? 0 : 1),
+                Padding = new Thickness(10, 6),
+                Child = tb,
+            };
         }
     }
 
