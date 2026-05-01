@@ -50,8 +50,7 @@ public sealed class SessionManager : IDisposable
     {
         var dbPath = Database.DefaultPath();
         var db = Database.Open(dbPath);
-        var root = Path.Combine(Path.GetDirectoryName(dbPath)!, "worktrees");
-        return new SessionManager(db, root, tokens);
+        return new SessionManager(db, Database.DefaultWorktreeRoot(), tokens);
     }
 
     // --- Loading ---
