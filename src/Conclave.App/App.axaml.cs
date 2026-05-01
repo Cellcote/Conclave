@@ -13,10 +13,12 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        StartupLog.Mark("App.OnFrameworkInitializationCompleted: begin");
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow();
         }
+        StartupLog.Mark("App.OnFrameworkInitializationCompleted: MainWindow assigned");
 
         base.OnFrameworkInitializationCompleted();
     }

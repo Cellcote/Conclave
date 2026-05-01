@@ -23,7 +23,16 @@ class Program
             return SmokePermission.RunAsync().GetAwaiter().GetResult();
         if (args.Length > 0 && args[0] == "--smoke-fusion")
             return SmokeFusion.Run();
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+        // Initialise the startup log alongside the SQLite file so
+        // <dataDir>/startup.log captures the same launch we're tracing.
+        var dataDir = System.IO.Path.GetDirectoryName(Database.DefaultPath())!;
+        StartupLog.Init(System.IO.Path.Combine(dataDir, "startup.log"));
+        StartupLog.Mark("Program.Main: pre-BuildAvaloniaApp");
+
+        var app = BuildAvaloniaApp();
+        StartupLog.Mark("Program.Main: AvaloniaApp built");
+        app.StartWithClassicDesktopLifetime(args);
         return 0;
     }
 
