@@ -160,6 +160,17 @@ public sealed class Database : IDisposable
         return System.IO.Path.Combine(dir, "conclave.db");
     }
 
+    // Worktrees live under ~/.Conclave on every platform — separate from the app-data
+    // directory (which on Windows sits inside AppData\Roaming\Conclave) so per-file paths
+    // stay clear of Windows' 260-char MAX_PATH limit. Every saved character matters: the
+    // 32-char project id and slug already cost ~40, and git itself appends paths like
+    // ".git/worktrees/<name>/index.lock" inside the linked worktree.
+    public static string DefaultWorktreeRoot()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return System.IO.Path.Combine(home, ".Conclave");
+    }
+
     public static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     private void Migrate()
