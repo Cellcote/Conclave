@@ -76,6 +76,7 @@
                                     <Grid.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Rename" Click="OnRenameProjectMenu" />
+                                            <MenuItem Header="Delete" Click="OnDeleteProjectMenu" />
                                         </ContextMenu>
                                     </Grid.ContextMenu>
                                     <TextBlock Text="{Binding ChevronGlyph}" FontSize="9"

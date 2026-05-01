@@ -509,8 +509,23 @@ public sealed class SessionManager : IDisposable
 
     public void DeleteProject(ProjectVm vm)
     {
+        var projectRecord = _db.GetProject(vm.Id);
         foreach (var s in vm.Sessions.ToList())
             DeleteSession(s, skipRemovalFromParent: true);
+
+        // Belt-and-braces cleanup: a `git worktree add` that half-failed never produced a
+        // SessionVm, so the loop above can't reach the orphan worktree dir or its
+        // `.git/worktrees/<slug>/` entry. Prune git's bookkeeping in the source repo and
+        // nuke the project's worktree-root subdir on disk.
+        if (projectRecord is not null)
+            try { WorktreeService.PruneWorktrees(projectRecord.Path); } catch { /* best-effort */ }
+        var projectWorktreeRoot = Path.Combine(_worktreeRoot, vm.Id);
+        if (Directory.Exists(projectWorktreeRoot))
+        {
+            try { Directory.Delete(projectWorktreeRoot, recursive: true); }
+            catch { /* best-effort */ }
+        }
+
         _db.DeleteProject(vm.Id);
         Projects.Remove(vm);
     }
