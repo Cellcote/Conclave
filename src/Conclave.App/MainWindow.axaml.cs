@@ -31,7 +31,9 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        StartupLog.Mark("MainWindow ctor: begin");
         InitializeComponent();
+        StartupLog.Mark("MainWindow ctor: InitializeComponent done");
 
         // macOS-only: extend our content under the title bar so the native traffic
         // lights sit inside the Avalonia window. Windows + Linux keep their default
@@ -44,6 +46,7 @@ public partial class MainWindow : Window
 
         var tokens = Tokens.DarkCoolNormalMedium();
         _manager = SessionManager.Open(tokens);
+        StartupLog.Mark("MainWindow ctor: SessionManager.Open done");
 
         // Native OS notifications for "claude is done" / "claude is asking a question".
         // We suppress while the window is active — the user already has eyes on it.
@@ -57,8 +60,15 @@ public partial class MainWindow : Window
         _manager.Notifications = notifications;
 
         var claudeService = new ClaudeService(_manager);
-        var capabilities = ClaudeCapabilities.Detect();
+        // Empty capabilities up front — XAML bindings paint with Available=false. The
+        // probe runs on the thread pool and re-fires PropertyChanged when `claude
+        // --version` returns. Used to be synchronous and waited up to 2.5s on the UI
+        // thread, which on Windows (npm/node shim, AV scan) was a big chunk of the
+        // pre-paint time.
+        var capabilities = new ClaudeCapabilities();
+        capabilities.BeginProbe();
         _shell = new ShellVm(tokens, _manager, capabilities);
+        StartupLog.Mark("MainWindow ctor: ShellVm built");
         _shell.SendRequested += (session, prompt) => claudeService.RunTurnAsync(session, prompt);
         _shell.PropertyChanged += OnShellPropertyChanged;
 
@@ -77,12 +87,14 @@ public partial class MainWindow : Window
             _autoCleanup?.Dispose();
             _manager?.Dispose();
         };
+        StartupLog.Mark("MainWindow ctor: end");
     }
 
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);
         ApplyResponsiveLayout(Bounds.Width, _shell?.HasActiveSession ?? false);
+        StartupLog.Mark("MainWindow OnLoaded");
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

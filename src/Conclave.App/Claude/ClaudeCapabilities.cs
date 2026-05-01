@@ -1,25 +1,56 @@
 using System.Diagnostics;
+using Conclave.App.Views;
 
 namespace Conclave.App.Claude;
 
 // One-shot probe of the local `claude` binary. Runs `claude --version` once at app
 // startup and caches the result. Surfaced in the titlebar so users can see at a glance
 // which CLI is wired up, and lets ViewModels gate features (e.g. Opus 4.7 needs ≥ 2.1.111).
-public sealed class ClaudeCapabilities
+//
+// The probe runs on a background thread (BeginProbe) — on Windows, `claude` is a
+// node/npm shim that can take >1s to spin up, and we used to block the UI thread
+// waiting for it. The instance starts in an empty state (Available == false) and
+// raises PropertyChanged once the result lands so XAML bindings update in place.
+public sealed class ClaudeCapabilities : Observable
 {
-    public string? Version { get; }
-    public bool Available => !string.IsNullOrEmpty(Version);
+    private string? _version;
+    public string? Version
+    {
+        get => _version;
+        private set
+        {
+            if (Set(ref _version, value))
+            {
+                Notify(nameof(Available));
+                Notify(nameof(SupportsForkSession));
+            }
+        }
+    }
+
+    public bool Available => !string.IsNullOrEmpty(_version);
 
     // --fork-session was added to Claude Code in 2.x. Conservative gate so the menu item
     // hides on older builds where the flag would error out.
-    public bool SupportsForkSession => AtLeast(Version, "2.0.0");
+    public bool SupportsForkSession => AtLeast(_version, "2.0.0");
 
-    private ClaudeCapabilities(string? version)
+    // Kick off `claude --version` on the thread pool. Result is published back to the
+    // capabilities object via PropertyChanged; bindings update wherever they sit. Fire
+    // and forget — failures leave Version null, which matches the "not detected" UX.
+    public void BeginProbe()
     {
-        Version = version;
+        _ = Task.Run(() =>
+        {
+            var version = ProbeOnce();
+            // PropertyChanged subscribers (Avalonia bindings) marshal themselves to the
+            // UI thread, so we don't need a Dispatcher hop here.
+            Version = version;
+            StartupLog.Mark(version is null
+                ? "claude probe complete (not detected)"
+                : $"claude probe complete: {version}");
+        });
     }
 
-    public static ClaudeCapabilities Detect()
+    private static string? ProbeOnce()
     {
         try
         {
@@ -33,24 +64,23 @@ public sealed class ClaudeCapabilities
             psi.ArgumentList.Add("--version");
 
             using var p = Process.Start(psi);
-            if (p is null) return new ClaudeCapabilities(null);
+            if (p is null) return null;
 
             var stdout = p.StandardOutput.ReadToEnd().Trim();
             // "claude --version" doesn't reliably return in some environments; cap the wait.
             if (!p.WaitForExit(2500))
             {
                 try { p.Kill(); } catch { }
-                return new ClaudeCapabilities(null);
+                return null;
             }
-            if (p.ExitCode != 0) return new ClaudeCapabilities(null);
+            if (p.ExitCode != 0) return null;
 
             // Output looks like "2.1.119 (Claude Code)" — keep the leading version token.
-            var version = stdout.Split(' ', 2)[0];
-            return new ClaudeCapabilities(version);
+            return stdout.Split(' ', 2)[0];
         }
         catch
         {
-            return new ClaudeCapabilities(null);
+            return null;
         }
     }
 
