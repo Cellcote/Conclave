@@ -176,10 +176,15 @@ public sealed class SessionManager : IDisposable
     // Windows each Process.Start carries an AV-scan tax, so a synchronous burst at boot
     // hurts perceived startup time even though the work runs off the UI thread.
     //
+    // `skip` is honoured so the just-activated session — which already refreshed eagerly
+    // via RefreshOnActivation — doesn't double its subprocess budget at startup.
+    //
     // Cheap to call from the UI thread; everything off-loads to Task.Run.
-    public void RefreshAllStaggered(TimeSpan stagger)
+    public void RefreshAllStaggered(TimeSpan stagger, SessionVm? skip = null)
     {
-        var sessions = Projects.SelectMany(p => p.Sessions).ToArray();
+        var sessions = Projects.SelectMany(p => p.Sessions)
+            .Where(s => !ReferenceEquals(s, skip))
+            .ToArray();
         if (sessions.Length == 0) return;
         _ = Task.Run(async () =>
         {
@@ -191,10 +196,7 @@ public sealed class SessionManager : IDisposable
                     RefreshPr(s);
                 });
                 if (stagger > TimeSpan.Zero)
-                {
-                    try { await Task.Delay(stagger); }
-                    catch { /* best-effort */ }
-                }
+                    await Task.Delay(stagger);
             }
         });
     }

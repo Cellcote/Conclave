@@ -122,8 +122,10 @@ public partial class MainWindow : Window
         // diff + PR state for every session. BuildSessionVm intentionally skips this on
         // load — bursting N×2 git/gh subprocesses at startup is the single largest cause
         // of slow first-paint on Windows where every Process.Start hits the AV scanner.
-        // 75ms between sessions keeps the pipeline busy without monopolising it.
-        _manager?.RefreshAllStaggered(TimeSpan.FromMilliseconds(75));
+        // 75ms between sessions keeps the pipeline busy without monopolising it. Skip
+        // the active session — the ShellVm constructor's auto-select fired
+        // RefreshOnActivation for it already, and we don't want to double its budget.
+        _manager?.RefreshAllStaggered(TimeSpan.FromMilliseconds(75), _shell?.ActiveSession);
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
