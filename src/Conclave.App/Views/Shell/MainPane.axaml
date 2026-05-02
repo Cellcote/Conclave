@@ -14,7 +14,7 @@
             <Setter Property="Background" Value="{Binding Tokens.PanelHi}" />
         </Style>
     </UserControl.Styles>
-    <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*,Auto">
+    <Grid Background="{Binding Tokens.Bg}" RowDefinitions="Auto,*,Auto,Auto">
 
         <!-- Header -->
         <Border Grid.Row="0" BorderBrush="{Binding Tokens.Border}" BorderThickness="0,0,0,1"
@@ -243,23 +243,6 @@
                            VerticalAlignment="Center" />
             </StackPanel>
 
-            <!-- Stalled banner: shown when StallDetectionService has flagged the session as
-                 silent past the threshold (typically after a sleep/wake). The Resume button
-                 is the manual escape hatch for users who didn't enable auto-resume. -->
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,18,0,4"
-                        IsVisible="{Binding ActiveSession.IsStalled, FallbackValue=False}">
-                <Border Width="6" Height="6" CornerRadius="3"
-                        Background="{Binding Tokens.Warn}" VerticalAlignment="Center" />
-                <TextBlock Text="Session stalled — Claude hasn't responded in a while."
-                           FontSize="12" FontStyle="Italic"
-                           Foreground="{Binding Tokens.TextDim}" VerticalAlignment="Center" />
-                <Button Content="Resume" Click="OnResumeStalled"
-                        Padding="10,3" FontSize="11.5" FontWeight="Medium"
-                        Background="Transparent"
-                        BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
-                        Foreground="{Binding Tokens.Text}"
-                        CornerRadius="{Binding Tokens.RadSmCorner}" />
-            </StackPanel>
             </StackPanel>
         </ScrollViewer>
 
@@ -273,7 +256,31 @@
         </ContentControl>
 
         <!-- Composer -->
-        <Border Grid.Row="2" x:Name="ComposerBorder" Margin="28,6,28,24"
+        <!-- Stalled banner: pinned above the composer (outside the transcript ScrollViewer)
+             so it's always visible when the active session is stalled, regardless of how
+             far up the user has scrolled. Auto-collapsed when not stalled. -->
+        <Border Grid.Row="2"
+                IsVisible="{Binding ActiveSession.IsStalled, FallbackValue=False}"
+                Margin="28,8,28,0" Padding="12,8"
+                BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadSmCorner}"
+                Background="{Binding Tokens.Panel}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <Border Width="6" Height="6" CornerRadius="3"
+                        Background="{Binding Tokens.Warn}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Session stalled — Claude hasn't responded in a while."
+                           FontSize="12" FontStyle="Italic"
+                           Foreground="{Binding Tokens.TextDim}" VerticalAlignment="Center" />
+                <Button Grid.Column="2" Content="Resume" Click="OnResumeStalled"
+                        Padding="10,3" FontSize="11.5" FontWeight="Medium"
+                        Background="Transparent"
+                        BorderBrush="{Binding Tokens.Border}" BorderThickness="1"
+                        Foreground="{Binding Tokens.Text}"
+                        CornerRadius="{Binding Tokens.RadSmCorner}" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="3" x:Name="ComposerBorder" Margin="28,6,28,24"
                 BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
                 CornerRadius="{Binding Tokens.RadMdCorner}" Background="{Binding Tokens.Panel}"
                 Padding="14,12"
