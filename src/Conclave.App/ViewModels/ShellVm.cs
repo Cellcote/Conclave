@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Reflection;
 using Conclave.App.Claude;
+using Conclave.App.Commands;
 using Conclave.App.Design;
 using Conclave.App.Sessions;
 
@@ -14,6 +15,12 @@ public sealed class ShellVm : Views.Observable
     public Tokens Tokens { get; }
     public SessionManager Manager { get; }
     public ClaudeCapabilities Claude { get; }
+
+    // Command catalog + key bindings. Both are app-global; live here because the
+    // palette VM (which is also owned by ShellVm) is the only consumer and the
+    // command actions close over `this`.
+    public CommandRegistry Commands { get; } = new();
+    public KeyMap KeyMap { get; } = KeyMap.Defaults();
 
     public ObservableCollection<ProjectVm> Projects => Manager.Projects;
     public ObservableCollection<FilterVm> Filters { get; } = new();
@@ -139,6 +146,25 @@ public sealed class ShellVm : Views.Observable
 
     public void OpenAbout() => IsAboutOpen = true;
     public void CloseAbout() => IsAboutOpen = false;
+
+    // --- Command palette ---
+
+    private CommandPaletteVm? _commandPalette;
+    public CommandPaletteVm? CommandPalette
+    {
+        get => _commandPalette;
+        private set { if (Set(ref _commandPalette, value)) Notify(nameof(IsCommandPaletteOpen)); }
+    }
+    public bool IsCommandPaletteOpen => _commandPalette is not null;
+
+    public void OpenCommandPalette()
+    {
+        // Re-create on each open so result list and selection start fresh. The cost
+        // is negligible — building the result pool is a single pass over commands +
+        // sessions.
+        CommandPalette = new CommandPaletteVm(this);
+    }
+    public void CloseCommandPalette() => CommandPalette = null;
 
     // Reads the assembly's InformationalVersion (stamped by `dotnet publish -p:Version=...`)
     // and trims the trailing `+commit` build metadata SourceLink appends. Falls back to the
@@ -319,6 +345,10 @@ public sealed class ShellVm : Views.Observable
         Tokens = tokens;
         Manager = manager;
         Claude = claude;
+        RegisterCommands();
+        // User overrides merge over defaults; broken JSON is silently ignored so a
+        // typo can't lock the user out of the palette.
+        KeyMap.ApplyOverridesJson(manager.Db.GetSetting(SettingsKeys.KeybindingsJson));
         BuildFilters();
         RecalcFilterCounts();
 
@@ -337,6 +367,26 @@ public sealed class ShellVm : Views.Observable
             foreach (var s in p.Sessions)
                 if (s.IsVisibleInTree) { ActiveSession = s; goto selected; }
     selected:;
+    }
+
+    private void RegisterCommands()
+    {
+        AppCommand C(string id, string title, string? group, Func<bool> can, Action exec)
+            => new(id, title, group, can, exec);
+        bool Always() => true;
+        bool HasSession() => HasActiveSession;
+
+        Commands.Register(C("palette.open", "Open command palette", "View", Always, OpenCommandPalette));
+        Commands.Register(C("session.new", "New session", "Session", Always, OpenNewSession));
+        Commands.Register(C("fusion.new", "New fusion project", "Session", Always, OpenNewFusionProject));
+        Commands.Register(C("session.cancel", "Cancel current turn", "Session", HasSession, CancelActiveTurn));
+        Commands.Register(C("view.transcript", "Show transcript", "View", HasSession, () => ActiveView = MainView.Terminal));
+        Commands.Register(C("view.plan", "Show plan", "View", HasSession, () => ActiveView = MainView.Plan));
+        Commands.Register(C("view.logs", "Show logs", "View", HasSession, () => ActiveView = MainView.Logs));
+        Commands.Register(C("panel.toggle", "Toggle right panel", "View", HasSession,
+            () => RightPanelVisible = !RightPanelVisible));
+        Commands.Register(C("prefs.open", "Preferences", "App", Always, OpenPreferences));
+        Commands.Register(C("about.open", "About Conclave", "App", Always, OpenAbout));
     }
 
     private void HookSession(SessionVm s) => s.PropertyChanged += OnSessionPropertyChanged;
