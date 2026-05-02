@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Conclave.App.ViewModels"
+             x:Class="Conclave.App.Views.Shell.CommandPaletteModal"
+             x:DataType="vm:ShellVm">
+    <Panel IsVisible="{Binding IsCommandPaletteOpen}" IsHitTestVisible="{Binding IsCommandPaletteOpen}"
+           KeyDown="OnModalKeyDown"
+           Focusable="True">
+        <Border Background="#A6000000" PointerPressed="OnBackdropPressed" />
+
+        <Border Width="560" MaxHeight="480"
+                VerticalAlignment="Top" HorizontalAlignment="Center"
+                Margin="0,120,0,0"
+                Background="{Binding Tokens.Bg}"
+                BorderBrush="{Binding Tokens.BorderHi}" BorderThickness="1"
+                CornerRadius="{Binding Tokens.RadLgCorner}"
+                ClipToBounds="True">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="60" OffsetY="20" Opacity="0.5" Color="Black" />
+            </Border.Effect>
+
+            <Panel DataContext="{Binding CommandPalette}"
+                   x:DataType="vm:CommandPaletteVm">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <TextBox Grid.Row="0"
+                             Name="QueryInput"
+                             Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="Type a command or session name…"
+                             FontSize="14"
+                             Padding="16,14"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="{Binding Tokens.Text}" />
+
+                    <Border Grid.Row="1" Height="1"
+                            Background="{Binding Tokens.Border}" />
+
+                    <ListBox Grid.Row="2"
+                             Name="ResultsList"
+                             ItemsSource="{Binding Results}"
+                             SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             Focusable="False">
+                        <ListBox.ItemContainerTheme>
+                            <ControlTheme TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="16,10" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="Foreground" Value="{Binding $parent[UserControl].((vm:ShellVm)DataContext).Tokens.Text}" />
+                                <Setter Property="Template">
+                                    <ControlTemplate>
+                                        <ContentPresenter Name="PART_ContentPresenter"
+                                                          Background="{TemplateBinding Background}"
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                          Content="{TemplateBinding Content}"
+                                                          Padding="{TemplateBinding Padding}" />
+                                    </ControlTemplate>
+                                </Setter>
+                                <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                    <Setter Property="Background" Value="{Binding $parent[UserControl].((vm:ShellVm)DataContext).Tokens.Panel}" />
+                                </Style>
+                                <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+                                    <Setter Property="Background" Value="{Binding $parent[UserControl].((vm:ShellVm)DataContext).Tokens.AccentDim}" />
+                                </Style>
+                            </ControlTheme>
+                        </ListBox.ItemContainerTheme>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CommandResultVm">
+                                <Grid ColumnDefinitions="*,Auto" PointerReleased="OnResultPressed">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="13"
+                                                   Foreground="{Binding $parent[UserControl].((vm:ShellVm)DataContext).Tokens.Text}" />
+                                        <TextBlock Text="{Binding Subtitle}"
+                                                   FontSize="11"
+                                                   Foreground="{Binding $parent[UserControl].((vm:ShellVm)DataContext).Tokens.TextMute}"
+                                                   IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Shortcut}"
+                                               FontSize="11"
+                                               FontFamily="ui-monospace,SFMono-Regular,Menlo,monospace"
+                                               Foreground="{Binding $parent[UserControl].((vm:ShellVm)DataContext).Tokens.TextDim}"
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding Shortcut, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Panel>
+        </Border>
+    </Panel>
+</UserControl>

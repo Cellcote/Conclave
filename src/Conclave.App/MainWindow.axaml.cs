@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Conclave.App.Claude;
+using Conclave.App.Commands;
 using Conclave.App.Design;
 using Conclave.App.Platform;
 using Conclave.App.Sessions;
@@ -41,6 +42,7 @@ public partial class MainWindow : Window
     private NewFusionProjectModal? _newFusionModal;
     private PreferencesModal? _preferencesModal;
     private AboutModal? _aboutModal;
+    private CommandPaletteModal? _commandPaletteModal;
 
     public MainWindow()
     {
@@ -112,6 +114,11 @@ public partial class MainWindow : Window
 
         DataContext = _shell;
 
+        // Window-level keyboard router. Owns the tunnel-phase pass for modifier-bearing
+        // chords (Cmd-K and friends) so they win even over a focused TextBox; bare-key
+        // chords still bubble normally so typing into inputs is unaffected.
+        KeyRouter.Attach(this, _shell.Commands, _shell.KeyMap);
+
         Activated += (_, _) => _isWindowActive = true;
         Deactivated += (_, _) => _isWindowActive = false;
 
@@ -164,6 +171,8 @@ public partial class MainWindow : Window
             EnsureModal(ref _preferencesModal);
         else if (e.PropertyName == nameof(ShellVm.IsAboutOpen) && _shell?.IsAboutOpen == true)
             EnsureModal(ref _aboutModal);
+        else if (e.PropertyName == nameof(ShellVm.IsCommandPaletteOpen) && _shell?.IsCommandPaletteOpen == true)
+            EnsureModal(ref _commandPaletteModal);
     }
 
     private void EnsureModal<T>(ref T? slot) where T : Control, new()

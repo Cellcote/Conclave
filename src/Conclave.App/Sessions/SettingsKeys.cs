@@ -8,6 +8,7 @@ public static class SettingsKeys
     public const string NotificationsEnabled = "notifications.enabled";
     public const string ClaudeVersion = "claude.version";
     public const string AutoResumeStalledSessions = "stall_detection.auto_resume";
+    public const string KeybindingsJson = "keybindings.json";
 
     public const int DefaultAutoCleanupDays = 7;
 
