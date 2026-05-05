@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Conclave.App.Sessions;
@@ -63,7 +64,11 @@ public sealed class ClaudeService
         session.AppendTranscript(userMsg);
         _manager.PersistMessage(session, userMsg);
 
-        Log(session, LogLevel.Inf, $"Turn started (model={session.Model}, branch={session.Branch})");
+        var timings = new TurnTimings();
+        var resumeLabel = string.IsNullOrEmpty(session.ClaudeSessionId) ? "fresh" : "resume";
+        Log(session, LogLevel.Inf,
+            $"Turn started (model={session.Model}, branch={session.Branch}, " +
+            $"add-dirs={session.AdditionalDirs.Count}, {resumeLabel})");
         _manager.UpdateStatus(session, SessionStatus.Working);
 
         // Let the dispatcher render the user's bubble + Working status before we spawn the
@@ -106,7 +111,14 @@ public sealed class ClaudeService
                 settingsJson: settingsJson,
                 ct: linked.Token))
             {
-                Handle(session, ev, toolsById, messageByToolId, liveByMessageId, permHandler);
+                if (!timings.LoggedFirstEvent)
+                {
+                    timings.LoggedFirstEvent = true;
+                    Log(session, LogLevel.Inf,
+                        $"First stream event after {timings.Total.ElapsedMilliseconds}ms " +
+                        "(CLI cold start + add-dir loading + resume replay)");
+                }
+                Handle(session, ev, toolsById, messageByToolId, liveByMessageId, permHandler, timings);
             }
             // The stream completed without throwing — claude has consumed the preamble (it
             // was injected into the system prompt of this invocation). Clear it so future
@@ -180,6 +192,19 @@ public sealed class ClaudeService
             TimestampUtc = DateTime.UtcNow,
         });
 
+    // Per-turn timing scratch. Wallclock from the moment we start the turn — used to log
+    // checkpoint latencies (first stream event, first text, first tool call) so the user
+    // can see where a slow turn is spending its time. Per-tool start times live here too
+    // so the matching tool_result can log how long the tool itself took.
+    private sealed class TurnTimings
+    {
+        public Stopwatch Total { get; } = Stopwatch.StartNew();
+        public bool LoggedFirstEvent { get; set; }
+        public bool LoggedFirstText { get; set; }
+        public bool LoggedFirstTool { get; set; }
+        public Dictionary<string, long> ToolStartMs { get; } = new();
+    }
+
     // Per-live-message scratch state. Buffer accumulates text_delta payloads cheaply;
     // VM.Content is only refreshed periodically (see HandleStreamDelta) so a long response
     // with thousands of deltas doesn't allocate a full new string per delta.
@@ -197,7 +222,8 @@ public sealed class ClaudeService
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
         Dictionary<string, LiveAssistantState> liveByMessageId,
-        PermissionTurnHandler? permHandler)
+        PermissionTurnHandler? permHandler,
+        TurnTimings timings)
     {
         // StallDetectionService checks how long ago the last event was — stamp on every
         // type so a long-running tool (no text deltas for minutes) doesn't false-positive.
@@ -219,11 +245,20 @@ public sealed class ClaudeService
                 break;
 
             case StreamDeltaEvent delta:
+                if (!timings.LoggedFirstText
+                    && delta.EventType == "content_block_delta"
+                    && delta.DeltaType == "text_delta"
+                    && !string.IsNullOrEmpty(delta.DeltaText))
+                {
+                    timings.LoggedFirstText = true;
+                    Log(session, LogLevel.Inf,
+                        $"First model text after {timings.Total.ElapsedMilliseconds}ms");
+                }
                 HandleStreamDelta(session, delta, liveByMessageId);
                 break;
 
             case AssistantEvent asst:
-                AppendAssistantMessage(session, asst, toolsById, messageByToolId, liveByMessageId, permHandler);
+                AppendAssistantMessage(session, asst, toolsById, messageByToolId, liveByMessageId, permHandler, timings);
                 break;
 
             case UserEvent user:
@@ -236,6 +271,12 @@ public sealed class ClaudeService
                         vm.Meta = MetaFromResult(vm.Kind, tr.Content);
                         if (messageByToolId.TryGetValue(tr.ToolUseId, out var owner))
                             touched.Add(owner);
+                        if (timings.ToolStartMs.Remove(tr.ToolUseId, out var startMs))
+                        {
+                            var elapsed = timings.Total.ElapsedMilliseconds - startMs;
+                            Log(session, LogLevel.Dbg,
+                                $"tool {vm.Kind} done after {elapsed}ms ({(tr.IsError ? "fail" : "ok")})");
+                        }
                     }
                 }
                 // Persist the tool-result updates against whatever messages own them.
@@ -364,7 +405,8 @@ public sealed class ClaudeService
         Dictionary<string, ToolCallVm> toolsById,
         Dictionary<string, TranscriptMessageVm> messageByToolId,
         Dictionary<string, LiveAssistantState> liveByMessageId,
-        PermissionTurnHandler? permHandler)
+        PermissionTurnHandler? permHandler,
+        TurnTimings timings)
     {
         var buf = new StringBuilder();
 
@@ -400,6 +442,12 @@ public sealed class ClaudeService
                     break;
                 case ToolUseContent tu:
                     hasToolUse = true;
+                    if (!timings.LoggedFirstTool)
+                    {
+                        timings.LoggedFirstTool = true;
+                        Log(session, LogLevel.Inf,
+                            $"First tool call after {timings.Total.ElapsedMilliseconds}ms");
+                    }
                     // TodoWrite is mirrored into the right-hand plan panel — rendering a
                     // pill in the transcript too is just noise, so update the plan and skip.
                     if (tu.Name == "TodoWrite")
@@ -419,6 +467,8 @@ public sealed class ClaudeService
                         ToolUseId = tu.Id,
                         PermissionHandler = permHandler,
                     };
+                    timings.ToolStartMs[tu.Id] = timings.Total.ElapsedMilliseconds;
+                    Log(session, LogLevel.Dbg, $"tool {vm.Kind} {vm.Target} starting");
                     message.Tools.Add(vm);
                     toolsById[tu.Id] = vm;
                     messageByToolId[tu.Id] = message;
